@@ -45,7 +45,6 @@ class MADDPG:
         self.soft_update(self.target_actor, self.actual_actor)
         self.soft_update(self.target_actor, self.actual_actor) 
         
-        pass 
 
 
     def step(self, states, actions, next_states, dones):
