@@ -7,8 +7,6 @@ import numpy as np
 with open("hyperparameters.json", 'r') as f:
     settings = json.load(f)
 
-
-
 env = UnityEnvironment(file_name="Tennis_Linux/Tennis.x86_64")
 
 # get the default brain
@@ -44,7 +42,6 @@ def training(num_episodes, max_timesteps=1000):
 
         startTime = time.time()                
         env_info = env.reset(train_mode=False)[brain_name]     
-        agent.reset()
         agents_scores = np.zeros(num_agents)  
         states = env_info.vector_observations 
         currentTimesteps = 0                        
