@@ -1,24 +1,50 @@
-from DDPG import Agent 
 import copy 
-
+from DDPG import Agent
 import torch 
 import torch.nn.functional as F 
 import torch.optim as optim 
 
 device = torch.device("cpu") 
 
+"""
+Tasks 
+
+1. Write and verify the agent is adding experiences 
+
+"""
+
+
 
 class AgentOrchestrator:
-    def __init__(self, num_agents,  state_size, action_size, seed, settings) -> None:
+    def __init__(self, num_agents,  state_size, action_size, seed, settings):
+        self.settings = settings 
         self.num_agents = num_agents 
-        self.agents = []
-        for _ in range(num_agents):
-            self.agents.append(Agent(state_size, action_size, seed, settings))
+        self.agents = [] 
+        for _ in range(num_agents): 
+            self.agents.append(Agent(state_size, action_size, seed, settings)) 
+
+
+    def learn(self, experiences, gamma):
+        """
+        Experiences structure: 
+        experiences = [ [s, a, ś, r, done], [s, a, ś, r, done] ] 
+        """ 
+
+        for n in range(self.num_agents): 
+            # TODO: Not sure 
+            # 1. Need to update the agent learn function to accept full experiences and parse them out 
+            # 2. 
+            self.agents[n].learn() 
+
 
     def step(self, agent_num, state, action, reward, next_state, done, timestep):
+        """
+        TODO: Input structure definition 
+        test 
+        """
         for agent in self.agents:
             agent.memory.add(state, action, reward, next_state, done) 
-            if len(self.memory) > self.settings["BATCH_SIZE"] and timestep % self.settings["LEARN_EVERY"] == 0:
+            if len(agent.memory) > self.settings["BATCH_SIZE"] and timestep % self.settings["LEARN_EVERY"] == 0:
                 experiences = agent.memory.sample() 
                 self.learn(experiences, self.settings['GAMMA']) 
     
@@ -31,12 +57,9 @@ class AgentOrchestrator:
             action.append(actions) 
         return actions 
 
-    def learn(self):
-        pass
+
 
     def hard_update(self):
         for agent in self.agents:
             for target_param, local_param in zip(agent.target_model.parameters(), agent.local_model.parameters()):
                 target_param.data.copy_(local_param.data + target_param.data) 
-
- 
