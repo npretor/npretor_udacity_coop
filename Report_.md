@@ -28,3 +28,20 @@ Plan
 1. Save the observations of both agents with labels (0, 1, 2, ... n) 
 2. Modify ddpg so the actor only sees it's interaction, but the critic sees all the concatenated actions 
 3. After that not sure, I'll start and see what happens 
+
+
+## Observation space
+- Two actions, space of actions is -1 to 1, inclusive.  
+    Moves are in 1 dimension: forwards or back, and jump: up or down. 
+    Each action looks like:  [signed_move_direction, signed_jump_distance]
+        actions: [lefthand_agent, righthand_agent]
+
+## What happened 
+* At first the agents just started jumping towards each-other into the net each timestep and the episode would end when they collided. They did not appear to be taking any random actions. I realized that the agents were not taking negative direction actions for either moves or jumps
+* 
+
+
+Questions 
+- Q: Does the critic take all the states and actions and the actor just takes in the individual actions? The actor has to make a choice about an individual agent's actions, right? 
+- A: After reading the paper in section 4.1: 
+    <i> The critic is augmented with extra information about the policies of the other agents</i>
