@@ -34,27 +34,24 @@ class AgentOrchestrator:
         for n in range(self.num_agents): 
             # TODO: Not sure 
             # 1. Need to update the agent learn function to accept full experiences and parse them out 
-            # 2. 
-            self.agents[n].learn(experiences, gamma) 
+            self.agents[n].learn(experiences, n, gamma) 
         
         self.hard_update() 
 
 
-    def step(self, states, actions, rewards, next_states, dones, timestep):
+    def step(self, global_states, global_actions, global_rewards, global_next_states, global_dones, timestep):
         """
-         
-        Train on: 
-            State of all agents 
-            Actions of   
+        Critic learns from global states, actor learns from local info (a, s', r, done)
         """
+        # import pdb; pdb.set_trace()
 
-        # for agent in self.agents:
         for i in range(self.num_agents):
-            self.agents[i].memory.add(states[i], actions[i], rewards[i], next_states[i], dones[i]) 
+            #self.agents[i].memory.add(states[i], actions[i], rewards[i], next_states[i], dones[i])
+            self.agents[i].memory.add(global_states, global_actions, global_rewards, global_next_states, global_dones) 
             
             if len(self.agents[i].memory) > self.settings["BATCH_SIZE"] and timestep % self.settings["LEARN_EVERY"] == 0:
                 experiences = self.agents[i].memory.sample() 
-                self.learn(experiences, self.settings['GAMMA']) 
+                self.agents[i].learn(experiences, i, self.settings['GAMMA']) 
     
 
     def act(self, all_agent_states):

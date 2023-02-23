@@ -43,7 +43,7 @@ def training(num_episodes, max_timesteps=1000):
         # Reset the environment and get the starting states
 
         env_info = env.reset(train_mode=False)[brain_name]     
-        states = env_info.vector_observations 
+        global_states = env_info.vector_observations 
 
         startTime = time.time()                
         agents_scores = np.zeros(num_agents)  
@@ -55,22 +55,25 @@ def training(num_episodes, max_timesteps=1000):
             rand_actions = np.clip(rand_actions, -1, 1)                  # all actions between -1 and 1
             #import pdb; pdb.set_trace()
             
-            actions = maddpg.act(states) 
+            global_actions = maddpg.act(global_states) 
             #print('Action:',actions)
 
-            env_info = env.step(actions)[brain_name]           # send all actions to tne environment
-            next_states = env_info.vector_observations         # get next state (for each agent)
-            rewards = env_info.rewards                         # get reward (for each agent)
-            dones = env_info.local_done                        # see if episode finished
+            env_info = env.step(global_actions)[brain_name]           # send all actions to tne environment
+            global_next_states = env_info.vector_observations         # get next state (for each agent)
+            global_rewards = env_info.rewards                         # get reward (for each agent)
+            global_dones = env_info.local_done                        # see if episode finished
             
-            #maddpg.step(states, actions, rewards, next_states, dones, timestep)
+            maddpg.step(global_states, global_actions, global_rewards, global_next_states, global_dones, timestep) 
 
+
+            
             scores += env_info.rewards                         # update the score (for each agent)
-            states = next_states                               # roll over states to next time step
-            if np.any(dones):                                  # exit loop if episode finished
+            global_states = global_next_states                               # roll over states to next time step
+            if np.any(global_dones):                                  # exit loop if episode finished
                 break
 
         print('Score (max over agents) from episode {}: {}'.format(ith_episode, np.max(scores))) 
+        print('Average score: ',np.mean(scores))
 
 training(settings['num_episodes'], settings['max_timesteps'])
 

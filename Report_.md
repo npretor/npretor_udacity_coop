@@ -45,3 +45,4 @@ Questions
 - Q: Does the critic take all the states and actions and the actor just takes in the individual actions? The actor has to make a choice about an individual agent's actions, right? 
 - A: After reading the paper in section 4.1: 
     <i> The critic is augmented with extra information about the policies of the other agents</i>
+    Also the paper (a review of cooperative multi-agent deep reinforcement learning) explains that the agents act on their local observations and rewards, but the critic evaluates their actions based on the global actions 

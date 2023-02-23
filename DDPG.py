@@ -50,8 +50,8 @@ class Agent():
         self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=self.settings["LR_ACTOR"])
 
         # Critic Network (w/ Target Network)
-        self.critic_local = Critic(state_size, action_size, random_seed, settings["critic_network_shape"]).to(device)
-        self.critic_target = Critic(state_size, action_size, random_seed, settings["critic_network_shape"]).to(device)
+        self.critic_local = Critic(state_size*num_agents, action_size, random_seed, settings["critic_network_shape"]).to(device)
+        self.critic_target = Critic(state_size*num_agents, action_size, random_seed, settings["critic_network_shape"]).to(device)
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.settings["LR_CRITIC"], weight_decay=self.settings["WEIGHT_DECAY"])
         #self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.settings["LR_CRITIC"]) 
 
@@ -113,8 +113,11 @@ class Agent():
     def reset(self):
         self.noise.reset()
 
-    def learn(self, experiences, gamma):
-        """Update policy and value parameters using given batch of experience tuples.
+    def learn(self, experiences, agent_index, gamma):
+        """
+        This function differs from the single agent DDPG in that the critic evaluates different material 
+        
+        Update policy and value parameters using given batch of experience tuples.
         Q_targets = r + γ * critic_target(next_state, actor_target(next_state))
         where:
             actor_target(state) -> action
@@ -125,18 +128,23 @@ class Agent():
             experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples 
             gamma (float): discount factor
         """
-        states, actions, rewards, next_states, dones = experiences
+        #global_states, actions, rewards, next_states, dones = experiences
+        global_states, global_actions, global_rewards, global_next_states, global_dones = experiences
+
+        #import pdb; pdb.set_trace()
+
 
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models
-        actions_next = self.actor_target(next_states) 
-        Q_targets_next = self.critic_target(next_states, actions_next) 
+        actions_next = self.actor_target(global_next_states[agent_index]) 
+        Q_targets_next = self.critic_target(global_next_states[agent_index], actions_next) 
 
         # Compute Q targets for current states (y_i) 
-        Q_targets = rewards + (gamma * Q_targets_next * (1 - dones)) 
+        # SHOULD I BE USING ALL THE REWARDS AND DONES OR JUST THE ONES FROM ONE AGENT 
+        Q_targets = global_rewards + (gamma * Q_targets_next * (1 - global_dones)) 
 
         # Compute critic loss
-        Q_expected = self.critic_local(states, actions) 
+        Q_expected = self.critic_local(global_states, global_actions) 
         critic_loss = F.mse_loss(Q_expected, Q_targets) 
         self.critic_loss = critic_loss
 
@@ -150,8 +158,8 @@ class Agent():
 
         # ---------------------------- update actor ---------------------------- #
         # Compute actor loss
-        actions_pred = self.actor_local(states)
-        actor_loss = -self.critic_local(states, actions_pred).mean()
+        actions_pred = self.actor_local(global_states[agent_index])
+        actor_loss = -self.critic_local(global_states, actions_pred).mean()
         self.actor_loss = actor_loss 
 
         # Minimize the loss

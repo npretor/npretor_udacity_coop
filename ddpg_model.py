@@ -46,11 +46,11 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     """Critic (Value) Model."""
 
-    def __init__(self, state_size, action_size, seed, network_shape):
+    def __init__(self, global_state_size, action_size, seed, network_shape):
         """Initialize parameters and build model.
         Params
         ======
-            state_size (int): Dimension of each state
+            state_size (int): Dimension of all states (in the case of MADDPG)
             action_size (int): Dimension of each action
             seed (int): Random seed
             fcs1_units (int): Number of nodes in the first hidden layer
@@ -58,8 +58,8 @@ class Critic(nn.Module):
         """
         super(Critic, self).__init__()
         self.seed =     torch.manual_seed(seed)
-        self.bn1 =      nn.BatchNorm1d(state_size) 
-        self.fcs1 =     nn.Linear(state_size, network_shape[0])
+        self.bn1 =      nn.BatchNorm1d(global_state_size) 
+        self.fcs1 =     nn.Linear(global_state_size, network_shape[0])
         self.fc2 =      nn.Linear(network_shape[0]+action_size, network_shape[1])
         #self.fc3 =     nn.Linear(network_shape[1], network_shape[2])
         self.fc4 =      nn.Linear(network_shape[1], 1)
@@ -73,10 +73,15 @@ class Critic(nn.Module):
 
     def forward(self, state, action):
         """Build a critic (value) network that maps (state, action) pairs -> Q-values."""
+        # State = Tensor[1024, 24]
+        # action = Tensor[1024, 2] 
+
         xs = self.bn1(state)
         xs = F.leaky_relu(self.fcs1(xs)) 
 
-        x = torch.cat((xs, action), dim=1)
+        import pdb; pdb.set_trace()
+        #x = torch.cat((xs, action), dim=-1)
+        x = torch.hstack((xs, action))
 
         x = F.leaky_relu(self.fc2(x))
         #x = F.leaky_relu(self.fc3(x))
