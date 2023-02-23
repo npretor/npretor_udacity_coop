@@ -3,7 +3,7 @@ import random
 import copy
 from collections import namedtuple, deque
 
-from maddpg_model import Actor, Critic
+from ddpg_model import Actor, Critic
 
 import torch
 import torch.nn.functional as F
@@ -37,9 +37,10 @@ class Agent():
         # This method only works because I know I want to approach a score of 30
         self.current_avg_score = 0.001 
         self.goal_avg_score = 30;
-        # This should be zero or close to it at 30 or above, and approaching one as the current_avg approaches zero 
-        self.noise_decay_rate = 1 - (self.goal_avg_score - self.current_avg_score)      
-
+        
+        # This should be zero or close to the reward or above, and approaching one as the current_avg approaches zero 
+        #self.noise_decay_rate = 1 - (self.goal_avg_score - self.current_avg_score)      
+        self.noise_decay_rate  = 1
         self.actor_loss = 0.0 
         self.critic_loss = 0.0 
 
@@ -55,7 +56,8 @@ class Agent():
         #self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.settings["LR_CRITIC"]) 
 
         # Noise process
-        self.noise = OUNoise(action_size * num_agents, random_seed)
+        #self.noise = OUNoise(action_size * num_agents, random_seed)
+        self.noise = RandNoise(action_size*num_agents, 10)
 
         # Replay memory
         self.memory = ReplayBuffer(action_size, self.settings["BUFFER_SIZE"], self.settings["BATCH_SIZE"], random_seed)
@@ -98,9 +100,14 @@ class Agent():
             #actions[i] = self.actor_local(states[i]).cpu().data.numpy() 
             action = self.actor_local(state).cpu().data.numpy() 
 
+        action_size = 2
+
+        #import pdb; pdb.set_trace()
+
         self.actor_local.train()
         if add_noise:
-            action += self.noise.sample().reshape((-1, 4)) * self.noise_decay_rate   
+            #action += self.noise.sample().reshape((-1, action_size)) * self.noise_decay_rate
+            action += self.noise.sample().reshape((-1)) # * self.noise_decay_rate   
         return np.clip(action, -1, 1)
 
     def reset(self):
@@ -191,6 +198,22 @@ class OUNoise:
         dx = self.theta * (self.mu - x) + self.sigma * np.array([random.random() for i in range(len(x))])
         self.state = x + dx
         return self.state
+
+class RandNoise:
+    def __init__(self, size, seed) -> None:
+        self.size = size
+        self.shape = (2,2)
+        pass
+
+
+    def reset(self):
+        pass 
+
+    def sample(self):
+        rand_actions = np.random.randn(self.size) 
+        rand_actions = np.clip(rand_actions, -1, 1)    
+        return rand_actions 
+
 
 class ReplayBuffer:
     """Fixed-size buffer to store experience tuples."""
