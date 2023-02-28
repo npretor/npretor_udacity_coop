@@ -42,12 +42,21 @@ class AgentOrchestrator:
     def step(self, global_states, global_actions, global_rewards, global_next_states, global_dones, timestep):
         """
         Critic learns from global states, actor learns from local info (a, s', r, done)
+        Memory should look like: [
+        [[agent1_experiences0], [agent2_experiences0]],
+        [[agent1_experiences1], [agent2_experiences1]],
+        ]
+        Add the full experience to the replay buffer, and have the agents sort it out 
         """
-        # import pdb; pdb.set_trace()
-
+        #experience = global_states, global_actions, global_rewards, global_next_states, global_dones
         for i in range(self.num_agents):
-            #self.agents[i].memory.add(states[i], actions[i], rewards[i], next_states[i], dones[i])
-            self.agents[i].memory.add(global_states, global_actions, global_rewards, global_next_states, global_dones) 
+            self.agents[i].memory.add(
+                global_states, 
+                global_actions, 
+                global_rewards, 
+                global_next_states, 
+                global_dones
+                ) 
             
             if len(self.agents[i].memory) > self.settings["BATCH_SIZE"] and timestep % self.settings["LEARN_EVERY"] == 0:
                 experiences = self.agents[i].memory.sample() 
@@ -60,7 +69,6 @@ class AgentOrchestrator:
         for i in range(self.num_agents):
             actions[i] = self.agents[i].act(all_agent_states[i]) 
         return actions 
-
 
 
     def hard_update(self):

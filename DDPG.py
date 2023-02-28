@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 
-device = torch.device("cpu")
+device = torch.device("cpu") 
 
 
 class Agent():
@@ -63,18 +63,12 @@ class Agent():
         self.memory = ReplayBuffer(action_size, self.settings["BUFFER_SIZE"], self.settings["BATCH_SIZE"], random_seed)
     
     def step(self, states, actions, rewards, next_states, dones, timestep):
-        """
-        Save experience in replay memory, and use random sample from buffer to learn.
-        
-        """
-        # Save each experience 
-        #for i in range(len(states)):
-        # Accidentally put this before step, causing the agent to learn every single timestep 
+        """Save experience in replay memory, and use random sample from buffer to learn."""
+
         for state, action, reward, next_state, done in zip(states, actions, rewards, next_states, dones):
             self.memory.add(state, action, reward, next_state, done) 
 
         # Learn, if enough samples are available in memory
-        #if len(self.memory) > self.settings["BATCH_SIZE"]:
         if len(self.memory) > self.settings["BATCH_SIZE"] and timestep % self.settings["LEARN_EVERY"] == 0:
             experiences = self.memory.sample()
             self.learn(experiences, self.settings["GAMMA"]) 
@@ -131,17 +125,30 @@ class Agent():
         #global_states, actions, rewards, next_states, dones = experiences
         global_states, global_actions, global_rewards, global_next_states, global_dones = experiences
 
-        #import pdb; pdb.set_trace()
+        
+        # now we need to reshape the stack of experiences from 
+        # [buffer_size, state_size * num agents] 
+        # to 
+        # [buffer_size, state_size] 
 
+        num_all_agents = 2
+
+        global_states =         global_states.reshape(self.settings['BATCH_SIZE'], num_all_agents, -1) #self.state_size
+        global_actions =        global_actions.reshape(self.settings['BATCH_SIZE'], num_all_agents, -1)
+        global_rewards =        global_rewards.reshape(self.settings['BATCH_SIZE'], num_all_agents, -1)
+        global_next_states =    global_next_states.reshape(self.settings['BATCH_SIZE'], num_all_agents, -1)
+        global_dones =          global_dones.reshape(self.settings['BATCH_SIZE'], num_all_agents, -1)
+        
+        #import pdb; pdb.set_trace()
 
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models
         actions_next = self.actor_target(global_next_states[agent_index]) 
-        Q_targets_next = self.critic_target(global_next_states[agent_index], actions_next) 
+        Q_targets_next = self.critic_target(global_next_states[agent_index], actions_next[agent_index]) 
 
         # Compute Q targets for current states (y_i) 
         # SHOULD I BE USING ALL THE REWARDS AND DONES OR JUST THE ONES FROM ONE AGENT 
-        Q_targets = global_rewards + (gamma * Q_targets_next * (1 - global_dones)) 
+        Q_targets = global_rewards + (gamma * Q_targets_next[agent_index] * (1 - global_dones)) 
 
         # Compute critic loss
         Q_expected = self.critic_local(global_states, global_actions) 
@@ -185,6 +192,7 @@ class Agent():
         for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
             target_param.data.copy_(tau*local_param.data + (1.0-tau)*target_param.data)
 
+
 class OUNoise:
     """Ornstein-Uhlenbeck process."""
 
@@ -206,6 +214,7 @@ class OUNoise:
         dx = self.theta * (self.mu - x) + self.sigma * np.array([random.random() for i in range(len(x))])
         self.state = x + dx
         return self.state
+
 
 class RandNoise:
     def __init__(self, size, seed) -> None:
@@ -241,11 +250,6 @@ class ReplayBuffer:
     
     def add(self, state, action, reward, next_state, done):
         """Add batch of new experiences to memory."""
-        # for i in range(len(states)):
-        #     print("adding experience batch: {}".format(i))
-        #     print(states[i])
-        #     e = self.experience(states[i], actions[i], rewards[i], next_states[i], dones[i])
-        #     self.memory.append(e)
         e = self.experience(state, action, reward, next_state, done)
         self.memory.append(e)
     

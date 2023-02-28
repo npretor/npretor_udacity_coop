@@ -50,25 +50,39 @@ def training(num_episodes, max_timesteps=1000):
         currentTimesteps = 0                        
 
         for timestep in range(max_timesteps):
-
-            rand_actions = np.random.randn(num_agents, action_size) # select an action (for each agent)
-            rand_actions = np.clip(rand_actions, -1, 1)                  # all actions between -1 and 1
-            #import pdb; pdb.set_trace()
+            # rand_actions = np.random.randn(num_agents, action_size) # select an action (for each agent)
+            # rand_actions = np.clip(rand_actions, -1, 1)                  # all actions between -1 and 1
             
-            global_actions = maddpg.act(global_states) 
-            #print('Action:',actions)
+            global_actions = maddpg.act(global_states)   # (2,2) = maddpg.act((2,24)) # how is the state size 24? 
 
-            env_info = env.step(global_actions)[brain_name]           # send all actions to tne environment
-            global_next_states = env_info.vector_observations         # get next state (for each agent)
-            global_rewards = env_info.rewards                         # get reward (for each agent)
-            global_dones = env_info.local_done                        # see if episode finished
+            env_info = env.step(global_actions)[brain_name]           # send all actions to tne environment 
+            global_next_states = env_info.vector_observations         # get next state (for each agent) 
+            global_rewards = env_info.rewards                         # get reward (for each agent) 
+            global_dones = env_info.local_done                        # see if episode finished 
             
+            #import pdb; pdb.set_trace() 
+
+            # Directly adding the global states just stacks them on top of each-other, so the agents cannot be retrieved.  
+            # global_state = [[1,2,3],[4,5,6]] after addition to memory: [[],[]]         
+            # 
+
+            # Reshape before adding, and unshape after 
+            global_states = global_states.reshape(-1) 
+            global_actions = global_actions.reshape(-1) 
+            global_rewards = np.asarray(global_rewards).reshape(-1) 
+            global_next_states = global_next_states.reshape(-1) 
+            global_dones = np.asarray(global_dones).reshape(-1)             
+
+            #import pdb; pdb.set_trace() 
+                
             maddpg.step(global_states, global_actions, global_rewards, global_next_states, global_dones, timestep) 
 
 
-            
             scores += env_info.rewards                         # update the score (for each agent)
-            global_states = global_next_states                               # roll over states to next time step
+
+            #global_states = global_states.reshape(maddpg.num_agents, -1) 
+            global_states = global_next_states.reshape(maddpg.num_agents, -1)         # roll over states to next time step
+            
             if np.any(global_dones):                                  # exit loop if episode finished
                 break
 
