@@ -5,7 +5,6 @@ import json
 from MADDPG import AgentOrchestrator  
 
 
-
 @pytest.fixture
 def settings():
     with open("../hyperparameters.json", 'r') as f:
