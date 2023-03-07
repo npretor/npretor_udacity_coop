@@ -79,7 +79,6 @@ class Critic(nn.Module):
         xs = self.bn1(state)
         xs = F.leaky_relu(self.fcs1(xs)) 
 
-        import pdb; pdb.set_trace()
         #x = torch.cat((xs, action), dim=-1)
         x = torch.hstack((xs, action))
 

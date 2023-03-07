@@ -139,8 +139,6 @@ class Agent():
         global_next_states =    global_next_states.reshape(self.settings['BATCH_SIZE'], num_all_agents, -1)
         global_dones =          global_dones.reshape(self.settings['BATCH_SIZE'], num_all_agents, -1)
         
-        #import pdb; pdb.set_trace()
-
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models
         actions_next = self.actor_target(global_next_states[agent_index]) 
