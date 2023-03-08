@@ -46,3 +46,20 @@ Questions
 - A: After reading the paper in section 4.1: 
     <i> The critic is augmented with extra information about the policies of the other agents</i>
     Also the paper (a review of cooperative multi-agent deep reinforcement learning) explains that the agents act on their local observations and rewards, but the critic evaluates their actions based on the global actions 
+
+
+
+## Information flow 
+
+## Observe, act, learn, repeat 
+
+1. Observe.         state[24]
+2. Act              action[2], reward[1], next_state[24], done[1]
+3. Each agent's info is sent back from the simulation. There are two agents i end up with data structured like this:
+    state = np.ndarray of shape         2, 24
+    action = np.ndarray of shape        2, 2 
+    reward = np.ndarray of shape        2, 1
+    next_state = np.ndarray of shape    2, 24
+    done = np.ndarray of shape          2, 1
+                    state[24], action[2], reward[1], next_state[24], done[1]
+   Feed the experience information into a deque. Each variable fed in must be 1 dimensional, but we need to save both agent's data. My solution now is to do a np.flatten / reshape(-1) on each experience. 
