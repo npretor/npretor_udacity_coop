@@ -3,15 +3,23 @@ Questions to answer when starting out:
 - What is the agent? Both of the actors? Both of the critics? 
 - How is credit assigned to an action? How many network have to be created? 
 
+## What is the information flow through the program? 
+### Flow level 1: 
+
+DDPG_Agent 
+    * step 
+    * act 
+    * reset 
+    * learn 
+    * soft_update 
+
+Replay_Buffer 
+
 
 Based on my reading of the <a href="https://arxiv.org/pdf/1706.02275.pdf">MA-DDPG paper</a>, the multi-agent version differs from single agent DDPG in a few ways. 
 
 * The critic sees, saves, and learns all actions 
-* The actor sees all actions, but acts only for one agent 
-* The action value function is similar, but not identical 
-
-The action value function is calculated as follows: 
-
+* The actor sees only it's perspective  
 
 
 I decided to work on my previous DDPG code, and modify the agent and model to work as a multi-agent DDPG model.  
@@ -34,7 +42,15 @@ Plan
 - Two actions, space of actions is -1 to 1, inclusive.  
     Moves are in 1 dimension: forwards or back, and jump: up or down. 
     Each action looks like:  [signed_move_direction, signed_jump_distance]
-        actions: [lefthand_agent, righthand_agent]
+        actions: [lefthand_agent, righthand_agent] 
+## Action space 
+
+
+## Classes
+
+### 
+
+
 
 ## What happened 
 * At first the agents just started jumping towards each-other into the net each timestep and the episode would end when they collided. They did not appear to be taking any random actions. I realized that the agents were not taking negative direction actions for either moves or jumps
@@ -45,4 +61,14 @@ Questions
 - Q: Does the critic take all the states and actions and the actor just takes in the individual actions? The actor has to make a choice about an individual agent's actions, right? 
 - A: After reading the paper in section 4.1: 
     <i> The critic is augmented with extra information about the policies of the other agents</i>
-    Also the paper (a review of cooperative multi-agent deep reinforcement learning) explains that the agents act on their local observations and rewards, but the critic evaluates their actions based on the global actions 
+    Also the paper (a review of cooperative multi-agent deep reinforcement learning) explains that the agents act on their local observations and rewards, but the critic evaluates their actions based on the global actions  
+
+
+
+# Learning function modifications 
+1. Predict the next action by querying each target actor network for the next action 
+2. Get the expected reward of those actions by sending the target critic network the all_next_actions and all_next_states  
+3. Get the expected reward of the current (target network?) using: 
+    y = agent_reward + gamma * (estimated_next_action_reward)
+    Q_t = r_agent + (gamma * Q_t_next * (1 - dones)) 
+4. Minimize the reward 

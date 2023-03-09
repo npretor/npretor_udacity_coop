@@ -9,11 +9,8 @@ device = torch.device("cpu")
 
 """
 Tasks 
-
 1. Write and verify the agent is adding experiences 
-
 """
-
 
 
 class AgentOrchestrator:
@@ -21,8 +18,8 @@ class AgentOrchestrator:
         self.settings = settings 
         self.num_agents = num_agents 
         self.agents = [] 
-        for _ in range(num_agents): 
-            self.agents.append(Agent(state_size, action_size, seed, settings, 1)) 
+        for id in range(num_agents): 
+            self.agents.append(Agent(state_size, action_size, seed, settings, 1, id)) 
 
 
     def learn(self, experiences, gamma):

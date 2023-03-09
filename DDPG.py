@@ -16,7 +16,7 @@ device = torch.device("cpu")
 class Agent():
     """Interacts with and learns from the environment."""
     
-    def __init__(self, state_size, action_size, random_seed, settings, num_agents):
+    def __init__(self, state_size, action_size, random_seed, settings, num_agents, agent_id):
         """Initialize an Agent object.
         
         Params
@@ -31,6 +31,7 @@ class Agent():
         self.seed = random.seed(random_seed)
         self.settings = settings
         self.num_agents = num_agents 
+        self.agent_id = agent_id
 
         # Let's set this in proximity to the goal. I could set a linear value, but that's not very helpful. 
         # Rather, if I set the noise multiplier amount proportional the proximity to a stated goal, it should auto-falloff as I approach
@@ -45,13 +46,13 @@ class Agent():
         self.critic_loss = 0.0 
 
         # Actor Network (w/ Target Network)
-        self.actor_local = Actor(state_size, action_size, random_seed, settings["actor_network_shape"]).to(device)
+        self.actor_local  = Actor(state_size, action_size, random_seed, settings["actor_network_shape"]).to(device)
         self.actor_target = Actor(state_size, action_size, random_seed, settings["actor_network_shape"]).to(device)
         self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=self.settings["LR_ACTOR"])
 
         # Critic Network (w/ Target Network)
-        self.critic_local = Critic(state_size*num_agents, action_size, random_seed, settings["critic_network_shape"]).to(device)
-        self.critic_target = Critic(state_size*num_agents, action_size, random_seed, settings["critic_network_shape"]).to(device)
+        self.critic_local  = Critic(state_size, action_size, random_seed, settings["critic_network_shape"]).to(device) 
+        self.critic_target = Critic(state_size, action_size, random_seed, settings["critic_network_shape"]).to(device) 
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.settings["LR_CRITIC"], weight_decay=self.settings["WEIGHT_DECAY"])
         #self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.settings["LR_CRITIC"]) 
 
@@ -122,36 +123,44 @@ class Agent():
             experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples 
             gamma (float): discount factor
         """
+        batch_size = self.settings['BATCH_SIZE'] 
+
         #global_states, actions, rewards, next_states, dones = experiences
         global_states, global_actions, global_rewards, global_next_states, global_dones = experiences
-
-        
-        # now we need to reshape the stack of experiences from 
-        # [buffer_size, state_size * num agents] 
-        # to 
-        # [buffer_size, state_size] 
-
         num_all_agents = 2
 
-        global_states =         global_states.reshape(self.settings['BATCH_SIZE'], num_all_agents, -1) #self.state_size
-        global_actions =        global_actions.reshape(self.settings['BATCH_SIZE'], num_all_agents, -1)
-        global_rewards =        global_rewards.reshape(self.settings['BATCH_SIZE'], num_all_agents, -1)
-        global_next_states =    global_next_states.reshape(self.settings['BATCH_SIZE'], num_all_agents, -1)
-        global_dones =          global_dones.reshape(self.settings['BATCH_SIZE'], num_all_agents, -1)
-        
-        #import pdb; pdb.set_trace()
+        global_states =         global_states.reshape(batch_size, num_all_agents, -1)  
+        global_actions =        global_actions.reshape(batch_size, num_all_agents, -1) 
+        global_rewards =        global_rewards.reshape(batch_size, num_all_agents, -1) 
+        global_next_states =    global_next_states.reshape(batch_size, num_all_agents, -1) 
+        global_dones =          global_dones.reshape(batch_size, num_all_agents, -1)  
+
 
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models
-        actions_next = self.actor_target(global_next_states[agent_index]) 
-        Q_targets_next = self.critic_target(global_next_states[agent_index], actions_next[agent_index]) 
+        actions_next = None
+        # THIS TILL FAIL ON MORE THAN 2 AGENTS
+        for i in range(num_all_agents - 1):
+            # actions_next.append(self.actor_target(global_next_states[:,i,:]))
+            actions_next = torch.hstack((self.actor_target(global_next_states[:,i,:]), self.actor_target(global_next_states[:,i+1,:])  ))
+        
+        # self.actor_target(global_next_states[:,i,:]) 
+        
+        # Each action is received as torch.Size([64,2])
+        # |
+        # V
+        # We want a torch.shape of [64,4]  
+        #actions_next = np.array(actions_next, dtype=float) 
+        #import pdb; pdb.set_trace()
+
+        Q_targets_next = self.critic_target(global_next_states.reshape(batch_size, -1), actions_next) 
 
         # Compute Q targets for current states (y_i) 
-        # SHOULD I BE USING ALL THE REWARDS AND DONES OR JUST THE ONES FROM ONE AGENT 
-        Q_targets = global_rewards + (gamma * Q_targets_next[agent_index] * (1 - global_dones)) 
+        #Q_targets = global_rewards[agent_index] + (gamma * Q_targets_next[agent_index] * (1 - global_dones[agent_index])) 
+        Q_targets = global_rewards[:,agent_index,:] + (gamma * Q_targets_next * (1-global_dones[:,agent_index,:]))
 
         # Compute critic loss
-        Q_expected = self.critic_local(global_states, global_actions) 
+        Q_expected = self.critic_local(global_states.reshape(batch_size, -1), global_actions.reshape(batch_size, -1)) 
         critic_loss = F.mse_loss(Q_expected, Q_targets) 
         self.critic_loss = critic_loss
 
@@ -165,8 +174,17 @@ class Agent():
 
         # ---------------------------- update actor ---------------------------- #
         # Compute actor loss
-        actions_pred = self.actor_local(global_states[agent_index])
-        actor_loss = -self.critic_local(global_states, actions_pred).mean()
+        for i in range(num_all_agents - 1):
+            # actions_next.append(self.actor_target(global_next_states[:,i,:]))
+            actions_next = torch.hstack((self.actor_target(global_states[:,i,:]), self.actor_target(global_states[:,i+1,:])  ))
+
+        # actions = []
+        # for i in range(num_all_agents):
+        #     actions.append(self.actor_target(global_states[:,i,:]))
+        # actions = np.array(actions, dtype=np.float) 
+
+        # actions_pred = self.actor_local(global_states[agent_index])
+        actor_loss = -self.critic_local(global_states.reshape(batch_size, -1), actions_next.reshape(batch_size, -1)).mean()
         self.actor_loss = actor_loss 
 
         # Minimize the loss

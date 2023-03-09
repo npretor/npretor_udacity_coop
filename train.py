@@ -8,7 +8,7 @@ from MADDPG import AgentOrchestrator
 with open("hyperparameters.json", 'r') as f:
     settings = json.load(f)
 
-env = UnityEnvironment(file_name="Tennis_Linux/Tennis.x86_64")
+env = UnityEnvironment(file_name="Tennis_Linux/Tennis.x86_64") 
 
 # get the default brain
 brain_name = env.brain_names[0]
@@ -31,7 +31,9 @@ state_size = states.shape[1]
 print('There are {} agents. Each observes a state with length: {}'.format(states.shape[0], state_size))
 print('The state for the first agent looks like:', states[0])
 
+
 maddpg = AgentOrchestrator(num_agents=num_agents,  state_size=state_size, action_size=action_size, seed=10, settings=settings)
+
 
 def training(num_episodes, max_timesteps=1000):
     scores_deque = deque(maxlen=100)
@@ -42,7 +44,7 @@ def training(num_episodes, max_timesteps=1000):
     for ith_episode in range(1, num_episodes+1): 
         # Reset the environment and get the starting states
 
-        env_info = env.reset(train_mode=False)[brain_name]     
+        env_info = env.reset(train_mode=True)[brain_name]     
         global_states = env_info.vector_observations 
 
         startTime = time.time()                
@@ -53,37 +55,28 @@ def training(num_episodes, max_timesteps=1000):
             # rand_actions = np.random.randn(num_agents, action_size) # select an action (for each agent)
             # rand_actions = np.clip(rand_actions, -1, 1)                  # all actions between -1 and 1
             
-            global_actions = maddpg.act(global_states)   # (2,2) = maddpg.act((2,24)) # how is the state size 24? 
+            global_actions = maddpg.act(global_states)   # (2,2) = maddpg.act((2,24)) # how is the state size 24? The udacity documentation is wrong
 
             env_info = env.step(global_actions)[brain_name]           # send all actions to tne environment 
             global_next_states = env_info.vector_observations         # get next state (for each agent) 
             global_rewards = env_info.rewards                         # get reward (for each agent) 
-            global_dones = env_info.local_done                        # see if episode finished 
-            
-            #import pdb; pdb.set_trace() 
+            global_dones = env_info.local_done                        # see if episode finished    
 
-            # Directly adding the global states just stacks them on top of each-other, so the agents cannot be retrieved.  
-            # global_state = [[1,2,3],[4,5,6]] after addition to memory: [[],[]]         
-            # 
-
-            # Reshape before adding, and unshape after 
+            # Flatten the states 
             global_states = global_states.reshape(-1) 
             global_actions = global_actions.reshape(-1) 
             global_rewards = np.asarray(global_rewards).reshape(-1) 
             global_next_states = global_next_states.reshape(-1) 
-            global_dones = np.asarray(global_dones).reshape(-1)             
+            global_dones = np.asarray(global_dones).reshape(-1) 
+            
 
-            #import pdb; pdb.set_trace() 
-                
             maddpg.step(global_states, global_actions, global_rewards, global_next_states, global_dones, timestep) 
-
 
             scores += env_info.rewards                         # update the score (for each agent)
 
-            #global_states = global_states.reshape(maddpg.num_agents, -1) 
             global_states = global_next_states.reshape(maddpg.num_agents, -1)         # roll over states to next time step
             
-            if np.any(global_dones):                                  # exit loop if episode finished
+            if np.any(global_dones): 
                 break
 
         print('Score (max over agents) from episode {}: {}'.format(ith_episode, np.max(scores))) 
@@ -91,4 +84,4 @@ def training(num_episodes, max_timesteps=1000):
 
 training(settings['num_episodes'], settings['max_timesteps'])
 
-env.close()
+env.close() 
