@@ -53,7 +53,7 @@ class AgentOrchestrator:
                 global_rewards, 
                 global_next_states, 
                 global_dones
-                ) 
+            ) 
             
             if len(self.agents[i].memory) > self.settings["BATCH_SIZE"] and timestep % self.settings["LEARN_EVERY"] == 0:
                 experiences = self.agents[i].memory.sample() 
