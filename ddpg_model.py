@@ -37,7 +37,7 @@ class Actor(nn.Module):
 
     def forward(self, state):
         """Build an actor (policy) network that maps states -> actions.""" 
-        #x = self.bn1(state) 
+        x = self.bn1(state) 
         x = F.leaky_relu(self.fc1(state)) 
         x = F.leaky_relu(self.fc2(x)) 
         return torch.tanh(self.fc3(x)) 
@@ -80,7 +80,7 @@ class Critic(nn.Module):
         """Build a critic (value) network that maps (state, action) pairs -> Q-values."""
         # State = Tensor[1024, 24]
         # action = Tensor[1024, 2] 
-        #x = self.bn1(x)
+        x = self.bn1(x)
         
         xs = F.leaky_relu(self.fcs1(states)) 
         x = torch.cat((actions, xs), dim=1)    #x = torch.vstack((xs, action))
