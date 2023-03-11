@@ -23,22 +23,29 @@ class Actor(nn.Module):
             fc2_units (int): Number of nodes in second hidden layer
         """
         super(Actor, self).__init__()
-        self.seed = torch.manual_seed(seed)
-        self.bn1 = nn.BatchNorm1d(state_size)
+        self.seed = torch.manual_seed(seed) 
         self.fc1 = nn.Linear(state_size, network_shape[0])
-        self.fc2 = nn.Linear(network_shape[0], network_shape[1])
-        self.fc3 = nn.Linear(network_shape[1], action_size)
-        self.reset_parameters()
+
+        self.bn1 = nn.BatchNorm1d(network_shape[0]) 
+        self.fc2 = nn.Linear(network_shape[0], network_shape[1]) 
+        self.fc3 = nn.Linear(network_shape[1], action_size) 
+        self.reset_parameters() 
 
     def reset_parameters(self):
         self.fc1.weight.data.uniform_(*hidden_init(self.fc1))
         self.fc2.weight.data.uniform_(*hidden_init(self.fc2))
         self.fc3.weight.data.uniform_(-3e-3, 3e-3)
 
+
     def forward(self, state):
         """Build an actor (policy) network that maps states -> actions.""" 
-        x = self.bn1(state) 
+        #import ipdb; ipdb.set_trace()  
+
         x = F.leaky_relu(self.fc1(state)) 
+        if x.ndim == 1:
+            x = torch.unsqueeze(x, 0)         
+
+        x = self.bn1(x) 
         x = F.leaky_relu(self.fc2(x)) 
         return torch.tanh(self.fc3(x)) 
 
@@ -60,9 +67,9 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
 
         #self.num_agents = num_agents 
-        self.seed =     torch.manual_seed(seed)
-        self.bn1 =      nn.BatchNorm1d(state_size*2) 
+        self.seed =     torch.manual_seed(seed) 
         self.fcs1 =     nn.Linear(state_size*2, network_shape[0])
+        self.bn1 =      nn.BatchNorm1d(network_shape[0]) 
         self.fc2 =      nn.Linear(network_shape[0] + action_size*2, network_shape[1]) 
         #self.fc3 =     nn.Linear(network_shape[1], network_shape[2])
         self.fc4 =      nn.Linear(network_shape[1], 1)
@@ -80,9 +87,11 @@ class Critic(nn.Module):
         """Build a critic (value) network that maps (state, action) pairs -> Q-values."""
         # State = Tensor[1024, 24]
         # action = Tensor[1024, 2] 
-        x = self.bn1(x)
         
         xs = F.leaky_relu(self.fcs1(states)) 
+        if xs.ndim == 1:
+            xs = torch.unsqueeze(xs, 0)  
+        xs = self.bn1(xs)
         x = torch.cat((actions, xs), dim=1)    #x = torch.vstack((xs, action))
         x = F.leaky_relu(self.fc2(x))
         return self.fc4(x)

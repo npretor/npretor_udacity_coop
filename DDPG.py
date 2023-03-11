@@ -54,14 +54,22 @@ class Agent():
         self.critic_local  = Critic(state_size, action_size, random_seed, settings["critic_network_shape"]).to(device) 
         self.critic_target = Critic(state_size, action_size, random_seed, settings["critic_network_shape"]).to(device) 
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.settings["LR_CRITIC"], weight_decay=self.settings["WEIGHT_DECAY"])
-        #self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.settings["LR_CRITIC"]) 
 
         # Noise process
-        #self.noise = OUNoise(action_size * num_agents, random_seed)
-        self.noise = RandNoise(action_size*num_agents, 10)
+        self.noise = OUNoise(action_size * num_agents, random_seed)
+        #self.noise = RandNoise(action_size*num_agents, 10)
 
         # Replay memory
         self.memory = ReplayBuffer(action_size, self.settings["BUFFER_SIZE"], self.settings["BATCH_SIZE"], random_seed)
+
+        # Copy networks
+        #  
+        for target_param, local_param in zip(self.actor_local.parameters(), self.actor_target.parameters()):
+            target_param.data.copy_(local_param.data + target_param.data) 
+            
+        for target_param, local_param in zip(self.critic_local.parameters(), self.critic_target.parameters()):
+            target_param.data.copy_(local_param.data + target_param.data)             
+
     
     def step(self, states, actions, rewards, next_states, dones, timestep):
         """Save experience in replay memory, and use random sample from buffer to learn."""
@@ -82,13 +90,13 @@ class Agent():
             actions for given state as per current policy 
         """
         # Convert states from numpy to tensor 
-        state = torch.from_numpy(state).float().to(device) 
+        #import ipdb; ipdb.set_trace()
 
-        # Create an empty list of actions 
-        #actions = np.zeros((self.num_agents, self.action_size)) 
+        state = torch.from_numpy(state).float().to(device) 
         
         # Set network to eval mode (as opposed to training mode)
         self.actor_local.eval() 
+
 
         # Get a state from actor_local and add it to the list of states for each actor  
         with torch.no_grad():
@@ -96,8 +104,6 @@ class Agent():
             action = self.actor_local(state).cpu().data.numpy() 
 
         action_size = 2
-
-        #import pdb; pdb.set_trace()
 
         self.actor_local.train()
         if add_noise:
@@ -151,7 +157,7 @@ class Agent():
         # V
         # We want a torch.shape of [64,4]  
         #actions_next = np.array(actions_next, dtype=float) 
-        #import pdb; pdb.set_trace()
+        #import ipdb; ipdb.set_trace() 
 
         Q_targets_next = self.critic_target(global_next_states.reshape(batch_size, -1), actions_next) 
 

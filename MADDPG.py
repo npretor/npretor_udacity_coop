@@ -17,9 +17,11 @@ class AgentOrchestrator:
     def __init__(self, num_agents,  state_size, action_size, seed, settings):
         self.settings = settings 
         self.num_agents = num_agents 
+        self.current_avg_score = 0
         self.agents = [] 
         for id in range(num_agents): 
             self.agents.append(Agent(state_size, action_size, seed, settings, 1, id)) 
+        
 
 
     def learn(self, experiences, gamma):
@@ -70,5 +72,4 @@ class AgentOrchestrator:
 
     def hard_update(self):
         #for agent in self.agents:
-        for target_param, local_param in zip(self.agents[0].target_model.parameters(), self.agents[1].local_model.parameters()):
-            target_param.data.copy_(local_param.data + target_param.data) 
+        pass
