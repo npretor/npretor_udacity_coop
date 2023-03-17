@@ -13,6 +13,21 @@ import torch.optim as optim
 device = torch.device("cpu") 
 
 
+class DemoAgent():
+    def __init__(self, state_size, action_size, seed, actor_path, critic_path, settings) -> None:
+        self.actor= Actor(state_size, action_size, random.random(), settings['actor_network_shape']).to(device)
+        self.critic = Critic(state_size, action_size, random.random(), settings['critic_network_shape']).to(device)
+        self.actor.load_state_dict(torch.load(actor_path))   
+        self.critic.load_state_dict(torch.load(critic_path)) 
+
+    def act(self, state):
+        state = torch.from_numpy(state).float().unsqueeze(0).to(device) 
+        self.actor.eval()
+        self.critic.eval() 
+        with torch.no_grad():
+            action_values = self.actor(state) 
+        return action_values.cpu().data.numpy()         
+
 class Agent():
     """Interacts with and learns from the environment."""
     
@@ -56,19 +71,18 @@ class Agent():
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.settings["LR_CRITIC"], weight_decay=self.settings["WEIGHT_DECAY"])
 
         # Noise process
-        self.noise = OUNoise(action_size * num_agents, random_seed)
-        #self.noise = RandNoise(action_size*num_agents, 10)
+        #self.noise = OUNoise(action_size * num_agents, random_seed)
+        self.noise = RandNoise(action_size*num_agents, 10)
 
         # Replay memory
         self.memory = ReplayBuffer(action_size, self.settings["BUFFER_SIZE"], self.settings["BATCH_SIZE"], random_seed)
 
-        # Copy networks
-        #  
+        # Target and local should be the same 
         for target_param, local_param in zip(self.actor_local.parameters(), self.actor_target.parameters()):
-            target_param.data.copy_(local_param.data + target_param.data) 
+            target_param.data.copy_(local_param.data)  
             
         for target_param, local_param in zip(self.critic_local.parameters(), self.critic_target.parameters()):
-            target_param.data.copy_(local_param.data + target_param.data)             
+            target_param.data.copy_(local_param.data)   
 
     
     def step(self, states, actions, rewards, next_states, dones, timestep):
@@ -144,11 +158,10 @@ class Agent():
 
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models
-        actions_next = None
         # THIS TILL FAIL ON MORE THAN 2 AGENTS
         for i in range(num_all_agents - 1):
-            # actions_next.append(self.actor_target(global_next_states[:,i,:]))
-            actions_next = torch.hstack((self.actor_target(global_next_states[:,i,:]), self.actor_target(global_next_states[:,i+1,:])  ))
+            # actions_next.append(self.actor_target(global_next_states[:,i,:])) 
+            global_next_actions = torch.hstack((self.actor_target(global_next_states[:,i,:]), self.actor_target(global_next_states[:,i+1,:])  )) 
         
         # self.actor_target(global_next_states[:,i,:]) 
         
@@ -159,11 +172,17 @@ class Agent():
         #actions_next = np.array(actions_next, dtype=float) 
         #import ipdb; ipdb.set_trace() 
 
-        Q_targets_next = self.critic_target(global_next_states.reshape(batch_size, -1), actions_next) 
+        with torch.no_grad():
+            Q_targets_next = self.critic_target(global_next_states.reshape(batch_size, -1), global_next_actions) 
 
-        # Compute Q targets for current states (y_i) 
-        #Q_targets = global_rewards[agent_index] + (gamma * Q_targets_next[agent_index] * (1 - global_dones[agent_index])) 
-        Q_targets = global_rewards[:,agent_index,:] + (gamma * Q_targets_next * (1-global_dones[:,agent_index,:]))
+            # Compute Q targets for current states (y_i) 
+            #Q_targets = global_rewards[agent_index] + (gamma * Q_targets_next[agent_index] * (1 - global_dones[agent_index])) 
+            # Q_targets = global_rewards[:,agent_index,:] + (gamma * Q_targets_next * (1-global_dones[:,agent_index,:])) 
+            #local_rewards = torch.squeeze(global_rewards[:,agent_index,:]).view(-1, 1) 
+            #local_dones   = torch.squeeze(torch.squeeze(global_dones[:,agent_index,:])) #.view(-1, 1)
+            local_rewards = global_rewards[:,agent_index,:] # .view(-1, 1) 
+            local_dones   = global_dones[:,agent_index,:]  # .view(-1, 1)        
+            Q_targets = local_rewards + (gamma * Q_targets_next * (1-local_dones))
 
         # Compute critic loss
         Q_expected = self.critic_local(global_states.reshape(batch_size, -1), global_actions.reshape(batch_size, -1)) 
@@ -175,28 +194,30 @@ class Agent():
         critic_loss.backward() 
 
         # Taken from: https://github.com/adaptationio/DDPG-Continuous-Control/blob/master/agent.py
-        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)     
+        # torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)     
         self.critic_optimizer.step() 
 
         # ---------------------------- update actor ---------------------------- #
         # Compute actor loss
         for i in range(num_all_agents - 1):
             # actions_next.append(self.actor_target(global_next_states[:,i,:]))
-            actions_next = torch.hstack((self.actor_target(global_states[:,i,:]), self.actor_target(global_states[:,i+1,:])  ))
+            global_next_actions_pred = torch.hstack((self.actor_target(global_states[:,i,:]), self.actor_target(global_states[:,i+1,:])  )) 
+        # global_next_actions = 
 
         # actions = []
         # for i in range(num_all_agents):
         #     actions.append(self.actor_target(global_states[:,i,:]))
         # actions = np.array(actions, dtype=np.float) 
 
-        # actions_pred = self.actor_local(global_states[agent_index])
-        actor_loss = -self.critic_local(global_states.reshape(batch_size, -1), actions_next.reshape(batch_size, -1)).mean()
+        # critic_local( [256, 48], [256, 4]) 
+        actor_loss = -self.critic_local(global_states.reshape(batch_size, -1), global_next_actions_pred.reshape(batch_size, -1)).mean() 
         self.actor_loss = actor_loss 
 
+        #import ipdb; ipdb.set_trace() 
         # Minimize the loss
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
+        # torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
         self.actor_optimizer.step()
 
         # ----------------------- update target networks ----------------------- #
