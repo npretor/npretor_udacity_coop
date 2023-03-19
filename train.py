@@ -4,6 +4,7 @@ from collections import deque
 import numpy as np
 from MADDPG import AgentOrchestrator 
 import wandb
+import torch 
 
 with open("hyperparameters.json", 'r') as f:
     settings = json.load(f)
@@ -43,14 +44,13 @@ def training(num_episodes, max_timesteps=1000):
 
         env_info = env.reset(train_mode=True)[brain_name]     
         global_states = env_info.vector_observations 
-
+        agents_scores = np.zeros(num_agents)
         startTime = time.time()                
-        agents_scores = np.zeros(num_agents)  
         currentTimesteps = 0                        
 
         for timestep in range(max_timesteps):
-            # rand_actions = np.random.randn(num_agents, action_size) # select an action (for each agent)
-            # rand_actions = np.clip(rand_actions, -1, 1)                  # all actions between -1 and 1
+            #rand_actions = np.random.randn(num_agents, action_size) # select an action (for each agent)
+            #global_actions = np.clip(rand_actions, -1, 1)                  # all actions between -1 and 1
             
             global_actions = maddpg.act(global_states)   
 
@@ -68,27 +68,33 @@ def training(num_episodes, max_timesteps=1000):
             
             maddpg.step(global_states, global_actions, global_rewards, global_next_states, global_dones, timestep) 
 
-            scores += env_info.rewards                         # update the score (for each agent)
+            agents_scores += env_info.rewards                         # update the score (for each agent)
 
-            global_states = global_next_states.reshape(maddpg.num_agents, -1)         
+            global_states = global_next_states.reshape(maddpg.num_agents, -1) 
             
             if np.any(global_dones): 
                 break
 
-        avg_score = np.mean(agents_scores) 
-        scores_deque.append(avg_score) 
-        scores.append(avg_score) 
-        maddpg.current_avg_score = np.mean(scores_deque)
+        score = np.max(agents_scores) 
+        scores.append(score) 
+        
+        scores_deque.append(score) 
+        avg_score = np.mean(scores_deque)
+        maddpg.current_avg_score = avg_score
+
         wandb.log({
                 "episode":ith_episode,
-                "score": avg_score,
-                "moving_average_score": np.mean(scores_deque)
+                "score": score,
+                "moving_average_score": avg_score
             })        
 
-        print("Episode: {}\t Average score: {}\t Score: {}".format(ith_episode, np.mean(scores_deque), avg_score)) 
+        print("Episode: {}\t Average score: {}\t Score: {}".format(ith_episode, avg_score, score)) 
+        if avg_score >= 0.5:
+            print("success, saving model")
+            for n, agent in enumerate(maddpg.agents):
+                torch.save(agent.actor_local.state_dict(), "success_checkpoint_actor_{}.pth".format(n))   
+                torch.save(agent.critic_local.state_dict(), "success_checkpoint_critic_{}.pth".format(n)) 
 
-        #print('Score (max over agents) from episode {}: {}'.format(ith_episode, np.max(scores))) 
-        print('Average score: ',np.mean(scores_deque))
 
 training(settings['num_episodes'], settings['max_timesteps'])
 

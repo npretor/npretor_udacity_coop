@@ -77,24 +77,24 @@ class Agent():
         # Replay memory
         self.memory = ReplayBuffer(action_size, self.settings["BUFFER_SIZE"], self.settings["BATCH_SIZE"], random_seed)
 
-        # Target and local should be the same 
+        # Target and local should be the same for actor and critic
         for target_param, local_param in zip(self.actor_local.parameters(), self.actor_target.parameters()):
             target_param.data.copy_(local_param.data)  
             
         for target_param, local_param in zip(self.critic_local.parameters(), self.critic_target.parameters()):
-            target_param.data.copy_(local_param.data)   
-
+            target_param.data.copy_(local_param.data) 
     
-    def step(self, states, actions, rewards, next_states, dones, timestep):
+    def step(self, timestep):
         """Save experience in replay memory, and use random sample from buffer to learn."""
 
-        for state, action, reward, next_state, done in zip(states, actions, rewards, next_states, dones):
-            self.memory.add(state, action, reward, next_state, done) 
+        # for state, action, reward, next_state, done in zip(states, actions, rewards, next_states, dones):
+        #     self.memory.add(state, action, reward, next_state, done) 
 
         # Learn, if enough samples are available in memory
         if len(self.memory) > self.settings["BATCH_SIZE"] and timestep % self.settings["LEARN_EVERY"] == 0:
             experiences = self.memory.sample()
-            self.learn(experiences, self.settings["GAMMA"]) 
+            self.learn(experiences, self.agent_id, self.settings["GAMMA"]) 
+            
 
     def act(self, state, add_noise=True):
         """
@@ -104,13 +104,10 @@ class Agent():
             actions for given state as per current policy 
         """
         # Convert states from numpy to tensor 
-        #import ipdb; ipdb.set_trace()
-
         state = torch.from_numpy(state).float().to(device) 
         
         # Set network to eval mode (as opposed to training mode)
         self.actor_local.eval() 
-
 
         # Get a state from actor_local and add it to the list of states for each actor  
         with torch.no_grad():
@@ -145,10 +142,10 @@ class Agent():
         """
         batch_size = self.settings['BATCH_SIZE'] 
 
-        #global_states, actions, rewards, next_states, dones = experiences
         global_states, global_actions, global_rewards, global_next_states, global_dones = experiences
         num_all_agents = 2
 
+        # [batch_size, 2, ...]
         global_states =         global_states.reshape(batch_size, num_all_agents, -1)  
         global_actions =        global_actions.reshape(batch_size, num_all_agents, -1) 
         global_rewards =        global_rewards.reshape(batch_size, num_all_agents, -1) 
@@ -159,18 +156,9 @@ class Agent():
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models
         # THIS TILL FAIL ON MORE THAN 2 AGENTS
-        for i in range(num_all_agents - 1):
-            # actions_next.append(self.actor_target(global_next_states[:,i,:])) 
-            global_next_actions = torch.hstack((self.actor_target(global_next_states[:,i,:]), self.actor_target(global_next_states[:,i+1,:])  )) 
-        
-        # self.actor_target(global_next_states[:,i,:]) 
-        
-        # Each action is received as torch.Size([64,2])
-        # |
-        # V
-        # We want a torch.shape of [64,4]  
-        #actions_next = np.array(actions_next, dtype=float) 
-        #import ipdb; ipdb.set_trace() 
+        # global_next_actions # [batch_size, 4] 
+
+        global_next_actions = torch.hstack((self.actor_target(global_next_states[:,0,:]), self.actor_target(global_next_states[:,1,:])  )) 
 
         with torch.no_grad():
             Q_targets_next = self.critic_target(global_next_states.reshape(batch_size, -1), global_next_actions) 
@@ -184,6 +172,7 @@ class Agent():
             local_dones   = global_dones[:,agent_index,:]  # .view(-1, 1)        
             Q_targets = local_rewards + (gamma * Q_targets_next * (1-local_dones))
 
+        #import ipdb; ipdb.set_trace()
         # Compute critic loss
         Q_expected = self.critic_local(global_states.reshape(batch_size, -1), global_actions.reshape(batch_size, -1)) 
         critic_loss = F.mse_loss(Q_expected, Q_targets) 
@@ -199,10 +188,9 @@ class Agent():
 
         # ---------------------------- update actor ---------------------------- #
         # Compute actor loss
-        for i in range(num_all_agents - 1):
+        #for i in range(num_all_agents - 1):
             # actions_next.append(self.actor_target(global_next_states[:,i,:]))
-            global_next_actions_pred = torch.hstack((self.actor_target(global_states[:,i,:]), self.actor_target(global_states[:,i+1,:])  )) 
-        # global_next_actions = 
+        global_next_actions_pred = torch.hstack((self.actor_target(global_states[:,0,:]), self.actor_target(global_states[:,1,:])  )) 
 
         # actions = []
         # for i in range(num_all_agents):

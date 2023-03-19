@@ -40,13 +40,13 @@ class Actor(nn.Module):
     def forward(self, state):
         """Build an actor (policy) network that maps states -> actions.""" 
         #import ipdb; ipdb.set_trace()  
+        if state.ndim == 1:
+            state = torch.unsqueeze(state, 0)         
 
-        x = F.leaky_relu(self.fc1(state)) 
-        if x.ndim == 1:
-            x = torch.unsqueeze(x, 0)         
+        x = F.relu(self.fc1(state)) 
 
         x = self.bn1(x) 
-        x = F.leaky_relu(self.fc2(x)) 
+        x = F.relu(self.fc2(x)) 
         return torch.tanh(self.fc3(x)) 
 
 
@@ -88,10 +88,10 @@ class Critic(nn.Module):
         # State = Tensor[1024, 24]
         # action = Tensor[1024, 2] 
         
-        xs = F.leaky_relu(self.fcs1(states)) 
-        if xs.ndim == 1:
-            xs = torch.unsqueeze(xs, 0)  
+        xs = F.relu(self.fcs1(states)) 
+        #if xs.ndim == 1:
+        #    xs = torch.unsqueeze(xs, 0)  
         xs = self.bn1(xs)
-        x = torch.cat((actions, xs), dim=1)    #x = torch.vstack((xs, action))
-        x = F.leaky_relu(self.fc2(x))
+        x = torch.cat((xs, actions), dim=1)    #x = torch.vstack((xs, action))
+        x = F.relu(self.fc2(x))
         return self.fc4(x)
