@@ -2,7 +2,7 @@ import random, time, json
 from unityagents import UnityEnvironment
 from collections import deque
 import numpy as np
-from MADDPG import AgentOrchestrator 
+from maddpg2 import AgentOrchestrator 
 import wandb
 import torch 
 
@@ -88,7 +88,7 @@ def training(num_episodes, max_timesteps=1000):
                 "moving_average_score": avg_score
             })        
 
-        print("Episode: {}\t Average score: {}\t Score: {}".format(ith_episode, avg_score, score)) 
+        print("Episode: {}\t Avg score: {}\t Score: {}\t Noise: {}".format(ith_episode, avg_score, score, maddpg.noise_decay_rate)) 
         if avg_score >= 0.5:
             print("success, saving model")
             for n, agent in enumerate(maddpg.agents):

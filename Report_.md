@@ -90,3 +90,9 @@ Questions
     done = np.ndarray of shape          2, 1
                     state[24], action[2], reward[1], next_state[24], done[1]
    Feed the experience information into a deque. Each variable fed in must be 1 dimensional, but we need to save both agent's data. My solution now is to do a np.flatten / reshape(-1) on each experience. 
+
+
+# Log 
+
+* Trained 
+* Added batch normalization. Also realized I was not deep copying at initialization, moved from agentorchestrator to ddpg 
