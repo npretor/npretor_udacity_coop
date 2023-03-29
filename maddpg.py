@@ -7,12 +7,8 @@ import torch.optim as optim
 import numpy as np
 from ddpg_model import Actor, Critic
 
-device = torch.device("cpu") 
-
-"""
-Tasks 
-1. Write and verify the agent is adding experiences 
-"""
+#device = torch.device("cpu") 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class DemoAgent():
@@ -54,7 +50,12 @@ class Agent():
         
         # This should be zero or close to the reward or above, and approaching one as the current_avg approaches zero 
         #self.noise_decay_rate = 1 - (self.goal_avg_score - self.current_avg_score)      
-        self.noise_decay_rate  = 1
+        #self.noise_decay_rate = 1
+        #
+        #self.noise_scalar = 1.0
+        #self.noise_decay = 0.001 
+
+
         self.actor_loss = 0.0 
         self.critic_loss = 0.0 
 
@@ -64,14 +65,13 @@ class Agent():
         self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=self.settings["LR_ACTOR"])
 
         # Critic Network (w/ Target Network)
-        self.critic_local  = Critic(state_size, action_size, random_seed, settings["critic_network_shape"]).to(device) 
-        self.critic_target = Critic(state_size, action_size, random_seed, settings["critic_network_shape"]).to(device) 
-        self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.settings["LR_CRITIC"]) #, weight_decay=self.settings["WEIGHT_DECAY"])
+        self.critic_local = Critic(state_size*num_agents, action_size*num_agents, random_seed, settings["critic_network_shape"]).to(device) 
+        self.critic_target = Critic(state_size*num_agents, action_size*num_agents, random_seed, settings["critic_network_shape"]).to(device) 
+        self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.settings["LR_CRITIC"] , weight_decay=self.settings["WEIGHT_DECAY"] )
 
         # Noise process
-        #self.noise = OUNoise(action_size * num_agents, random_seed)
-        # self.noise = RandNoise(action_size*num_agents, 10)
-        self.noise = RandNoise(action_size, 10)
+        self.noise = OUNoise(action_size, random_seed)
+        #self.noise = RandNoise(action_size, random_seed)
 
         # Replay memory
         #self.memory = ReplayBuffer(action_size, self.settings["BUFFER_SIZE"], self.settings["BATCH_SIZE"], random_seed)
@@ -103,15 +103,18 @@ class Agent():
         self.actor_local.train()
         if add_noise:
             #self.noise_decay_rate = 1 - (self.current_avg_score/self.goal_avg_score)
-            action += self.noise.sample().reshape((-1)) * noise_decay_rate   
+            action += (self.noise.sample().reshape((-1)) * noise_decay_rate) 
         return np.clip(action, -1, 1)
 
     def reset(self):
         self.noise.reset()
 
-    def learn(self, experiences, agent_index, gamma):
+    def learn(self, experiences, agent_index, gamma, all_actions, all_next_actions):
         """
         This function differs from the single agent DDPG in that the critic evaluates different material 
+
+        The actor learns the best action from the critic
+        The critic learns to set a value for (action,state) pair using the discounted reward  
         
         Update policy and value parameters using given batch of experience tuples.
         Q_targets = r + γ * critic_target(next_state, actor_target(next_state))
@@ -124,66 +127,61 @@ class Agent():
             experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples 
             gamma (float): discount factor
         """
-        if agent_index == 0:
-            other_index = 1
-        else:
-            other_index = 0
-
-        batch_size = self.settings['BATCH_SIZE'] 
-        num_global_agents = 2
 
         global_states, global_actions, global_rewards, global_next_states, global_dones = experiences
-
-        # [batch_size, 2, ...]
-        global_states =         global_states.reshape(batch_size, num_global_agents, -1)  
-        global_actions =        global_actions.reshape(batch_size, num_global_agents, -1) 
-        global_rewards =        global_rewards.reshape(batch_size, num_global_agents, -1) 
-        global_next_states =    global_next_states.reshape(batch_size, num_global_agents, -1) 
-        global_dones =          global_dones.reshape(batch_size, num_global_agents, -1)  
-
-        global_next_actions = torch.hstack((self.actor_target(global_next_states[:,agent_index,:]), self.actor_target(global_next_states[:,other_index,:])  )) 
-        global_next_actions_pred = torch.hstack((self.actor_target(global_states[:,agent_index,:]), self.actor_target(global_states[:,other_index,:])  )) 
-
-        local_rewards = global_rewards[:,agent_index,:] # .view(-1, 1) 
-        local_dones   = global_dones[:,agent_index,:]  # .view(-1, 1)  
-
-        #import ipdb; ipdb.set_trace() 
-
-
+        self.critic_optimizer.zero_grad()
+        agent_index = torch.tensor([agent_index]).to(device)
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models
-        # THIS TILL FAIL ON MORE THAN 2 AGENTS
 
+        #all_next_actions = torch.hstack((all_next_actions[0], all_next_actions[1]))
+        actions_next = torch.cat(all_next_actions, dim=1).to(device)  
 
         with torch.no_grad():
-            Q_targets_next = self.critic_target(global_next_states.reshape(batch_size, -1), global_next_actions) 
-            Q_targets = local_rewards + (gamma * Q_targets_next * (1-local_dones))
+            #                                        [256,48]          [256, 4]
+            Q_targets_next = self.critic_target(global_next_states, actions_next) 
 
-        # Compute critic loss
-        Q_expected = self.critic_local(global_states.reshape(batch_size, -1), global_actions.reshape(batch_size, -1)) 
+        Q_expected = self.critic_local(global_states, global_actions)  
+        Q_targets = global_rewards.index_select(1, agent_index) + (gamma * Q_targets_next * (1-global_dones.index_select(1, agent_index)))
+        
         critic_loss = F.mse_loss(Q_expected, Q_targets) 
         self.critic_loss = critic_loss
+        self.critic_optimizer.zero_grad() 
 
         # Minimize the loss
-        self.critic_optimizer.zero_grad() 
         critic_loss.backward() 
-
         # Taken from: https://github.com/adaptationio/DDPG-Continuous-Control/blob/master/agent.py
         torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)     
         self.critic_optimizer.step() 
 
         # ---------------------------- update actor ---------------------------- #
         # Compute actor loss
-        
-
-        # critic_local( [256, 48], [256, 4]) 
-        actor_loss = -self.critic_local(global_states.reshape(batch_size, -1), global_next_actions_pred.reshape(batch_size, -1)).mean() 
-        self.actor_loss = actor_loss 
-
         # Minimize the loss
         self.actor_optimizer.zero_grad()
+
+        #import ipdb; ipdb.set_trace()
+        
+        # critic_local( [256, 48], [256, 4]) 
+        #actor_loss = -self.critic_local(global_states.reshape(batch_size, -1), global_next_actions_pred.reshape(batch_size, -1)).mean() 
+        # a = all_actions[0].detach() 
+        # b = all_actions[1].detach()  
+        # all_actions_td = torch.hstack((a, b))
+
+        # all_actions_td = []
+        # for i, actions in enumerate(all_actions):
+        #     if i == self.agent_id:
+        #         all_actions_td.append(actions)
+        #     else:
+        #         actions.detach()
+
+        # import ipdb; ipdb.set_trace()
+        all_actions_td = [actions if i == self.agent_id else actions.detach() for i, actions in enumerate(all_actions)]
+
+        all_actions_td = torch.cat(all_actions_td, dim=1).to(device)
+        actor_loss = -self.critic_local(global_states, all_actions_td).mean()
+        
+        self.actor_loss = actor_loss 
         actor_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
         self.actor_optimizer.step()
 
         # ----------------------- update target networks ----------------------- #
@@ -284,55 +282,92 @@ class ReplayBuffer:
 class AgentOrchestrator:
     def __init__(self, num_agents,  state_size, action_size, seed, settings):
         self.settings = settings 
-        self.num_agents = num_agents 
         self.current_avg_score = 0.001
+        self.current_episode_score = 0.001
+        self.timestep = 0
+
+        self.num_agents = num_agents 
+        self.action_size = action_size
+        self.state_size = state_size
+
 
         #  - - - Set the noise falloff - - - -  # 
         #  - - - - Linear fallof  - - - - - - - #
         # Let's set this in proximity to the goal. I could set a linear value, but that's not very helpful. 
         # Rather, if I set the noise multiplier amount proportional the proximity to a stated goal, it should auto-falloff as I approach
         # This method only works because I know I want to approach a score of 30
-        self.goal_avg_score = .51
+        self.goal_avg_score = .25
         if self.current_avg_score > self.goal_avg_score:
             self.current_avg_score = self.goal_avg_score
         else:
             self.current_avg_score = self.current_avg_score 
         self.noise_decay_rate = abs(1 - (self.current_avg_score/self.goal_avg_score))  
 
+        self.noise_scalar = 1.0
+        self.noise_decay = 0.001
+
+        #  - - - - - Setup agents - - - - - #
         self.agents = [] 
         for id in range(num_agents): 
-            self.agents.append(Agent(state_size, action_size, seed, settings, 2, id)) 
+            self.agents.append(Agent(state_size, action_size, seed, settings, self.num_agents, id)) 
         
         self.memory = ReplayBuffer(action_size, self.settings["BUFFER_SIZE"], self.settings["BATCH_SIZE"], seed=55) 
 
 
     def learn(self, experiences, gamma):
+        next_actions = [] 
+        actions = [] 
+
         for agent_index, agent in enumerate(self.agents):
-            agent.learn(experiences, agent_index, gamma) 
+
+            states, _ , _ , next_states, _ = experiences[agent_index] 
+            id = torch.tensor([agent_index]).to(device)     
+
+            #state = states.reshape(self.settings['BATCH_SIZE'], self.num_agents, 24) 
+            state = states.reshape(-1, self.action_size, self.state_size).index_select(1, id).squeeze(1)
+            action = agent.actor_local(state) 
+            actions.append(action)
+
+            #next_state = states.reshape(self.settings['BATCH_SIZE'], self.num_agents, 24)
+            next_state = next_states.reshape(-1, self.action_size, self.state_size).index_select(1, id).squeeze(1)            
+            next_action = agent.actor_target(next_state) 
+            next_actions.append(next_action)
+
+        for agent_index, agent in enumerate(self.agents):
+            agent.learn(experiences[agent_index], agent_index, gamma, actions, next_actions) 
 
 
-
-    def step(self, global_states, global_actions, global_rewards, global_next_states, global_dones, timestep):
+    def step(self, global_states, global_actions, global_rewards, global_next_states, global_dones):
         """ 
         Add global experiences to memory  
         """
+        global_states = global_states.reshape(1, -1) 
+        global_next_states = global_next_states.reshape(1, -1) 
+        
+        self.timestep += 1
+
         self.memory.add(global_states, global_actions, global_rewards, global_next_states, global_dones) 
 
-        if len(self.memory) > self.settings["BATCH_SIZE"] and timestep % self.settings["LEARN_EVERY"] == 0:
-            N_RETRAININGS = 4
+        if len(self.memory) > self.settings["BATCH_SIZE"] and self.timestep % self.settings["LEARN_EVERY"] == 0:
+            N_RETRAININGS = 1
             for _ in range(N_RETRAININGS):
-                experiences = self.memory.sample() 
-                for agent_index, agent in enumerate(self.agents):
-                    agent.learn(experiences, agent_index, self.settings['GAMMA']) 
-                #self.learn(experiences, self.settings['GAMMA']) 
+                experiences = [self.memory.sample() for _ in range(self.num_agents)] 
+                self.learn(experiences, self.settings['GAMMA']) 
     
 
-    def act(self, all_agent_states):
+    def act(self, all_agent_states, full_random=False):
+        if full_random:
+            return np.clip(np.random.randn(self.num_agents, self.action_size), -1, 1).reshape(1,-1)                  
+
         """State is the state of both agents"""
         actions = np.empty((self.num_agents, 2))    # This should be clipped 
+        #for agent, state in zip(self.agents, all_agent_states):
         for i, agent in enumerate(self.agents):
             #self.noise_decay_rate = abs(1 - (self.current_avg_score/self.goal_avg_score) )
-            self.noise_decay_rate = 1.0
-            actions[i] = agent.act(all_agent_states[i], self.noise_decay_rate) 
+            
 
-        return actions  # np.clip(action, -1, 1)
+                            
+            #self.noise_decay_rate = 1.0
+            actions[i] = agent.act(all_agent_states[i], self.noise_scalar) 
+
+        return actions.reshape(1, -1)

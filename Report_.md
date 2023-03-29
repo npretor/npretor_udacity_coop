@@ -6,21 +6,17 @@ Questions to answer when starting out:
 ## What is the information flow through the program? 
 ### Flow level 1: 
 
-DDPG_Agent 
-    * step 
-    * act 
-    * reset 
-    * learn 
-    * soft_update 
-
-Replay_Buffer 
+1. The environment presents a state
+1. Each actor observes it's local state, and infers an action 
+2. The environment responds with a next_state, along with a reward
+```
+state -> action -> next_state, reward
+```
 
 
 Based on my reading of the <a href="https://arxiv.org/pdf/1706.02275.pdf">MA-DDPG paper</a>, the multi-agent version differs from single agent DDPG in a few ways. 
-
 * The critic sees, saves, and learns all actions 
 * The actor sees only it's perspective  
-
 
 I decided to work on my previous DDPG code, and modify the agent and model to work as a multi-agent DDPG model.  
 Principal differences: 
@@ -29,32 +25,20 @@ From Lowe et al.(2017): <i>"in which each agent trains a DDPG algorithm such tha
 
 Based on this I plan to modify the DDPG into a MADDPG using the following method. 
 
-Problems: 
-- Should each agent be a separate instance of a class? Yes, moving to one MADDPG class which interacts with a DDPG instance for each agent 
-
-Plan 
-1. Save the observations of both agents with labels (0, 1, 2, ... n) 
-2. Modify ddpg so the actor only sees it's interaction, but the critic sees all the concatenated actions 
-3. After that not sure, I'll start and see what happens 
-
 
 ## Observation space
+ - 24 vectors 
+
+## Action space 
 - Two actions, space of actions is -1 to 1, inclusive.  
     Moves are in 1 dimension: forwards or back, and jump: up or down. 
     Each action looks like:  [signed_move_direction, signed_jump_distance]
         actions: [lefthand_agent, righthand_agent] 
-## Action space 
+
+## Rewards 
 
 
-## Classes
-
-### 
-
-
-
-## What happened 
-* At first the agents just started jumping towards each-other into the net each timestep and the episode would end when they collided. They did not appear to be taking any random actions. I realized that the agents were not taking negative direction actions for either moves or jumps
-* 
+## Dones
 
 
 Questions 
@@ -96,3 +80,8 @@ Questions
 
 * Trained 
 * Added batch normalization. Also realized I was not deep copying at initialization, moved from agentorchestrator to ddpg 
+
+
+
+1. Observe state  Numpy[2,24]
+2. Choose a

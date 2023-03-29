@@ -2,7 +2,7 @@ import random, time, json
 from unityagents import UnityEnvironment
 from collections import deque
 import numpy as np
-from maddpg2 import AgentOrchestrator 
+from maddpg import AgentOrchestrator 
 import wandb
 import torch 
 
@@ -36,60 +36,68 @@ maddpg = AgentOrchestrator(num_agents=num_agents,  state_size=state_size, action
 def training(num_episodes, max_timesteps=1000):
     scores_deque = deque(maxlen=100)
     scores = []
+    average_scores = [] 
     avg_scores = []
-    max_score = -np.Inf     
+    max_reward = 0.0
 
     for ith_episode in range(1, num_episodes+1): 
         # Reset the environment and get the starting states
-
         env_info = env.reset(train_mode=True)[brain_name]     
         global_states = env_info.vector_observations 
         agents_scores = np.zeros(num_agents)
-        startTime = time.time()                
-        currentTimesteps = 0                        
+        episode_rewards = []               
+
+        maddpg.noise_scalar = maddpg.noise_scalar - maddpg.noise_decay
+        if maddpg.noise_scalar <= 0.0:
+            maddpg.noise_scalar = 0.0   
 
         for timestep in range(max_timesteps):
-            #rand_actions = np.random.randn(num_agents, action_size) # select an action (for each agent)
-            #global_actions = np.clip(rand_actions, -1, 1)                  # all actions between -1 and 1
             
-            global_actions = maddpg.act(global_states)   
+            global_actions = maddpg.act(global_states, full_random=False)   
+            #
+            # print('actions: ',global_actions)
 
-            env_info = env.step(global_actions)[brain_name]           # send all actions to tne environment 
-            global_next_states = env_info.vector_observations         # get next state (for each agent) 
-            global_rewards = env_info.rewards                         # get reward (for each agent) 
-            global_dones = env_info.local_done                        # see if episode finished    
+            env_info = env.step(global_actions)[brain_name]           
+            global_next_states = env_info.vector_observations         
+            global_rewards = env_info.rewards                         
+            global_dones = env_info.local_done  
 
-            # Flatten the states 
-            global_states = global_states.reshape(-1) 
-            global_actions = global_actions.reshape(-1) 
-            global_rewards = np.asarray(global_rewards).reshape(-1) 
-            global_next_states = global_next_states.reshape(-1) 
-            global_dones = np.asarray(global_dones).reshape(-1) 
-            
-            maddpg.step(global_states, global_actions, global_rewards, global_next_states, global_dones, timestep) 
+            maddpg.step(global_states, global_actions, global_rewards, global_next_states, global_dones) 
 
-            agents_scores += env_info.rewards                         # update the score (for each agent)
-
-            global_states = global_next_states.reshape(maddpg.num_agents, -1) 
+            agents_scores += global_rewards
+            episode_rewards.append(global_rewards) 
+            global_states = global_next_states
             
             if np.any(global_dones): 
                 break
 
-        score = np.max(agents_scores) 
-        scores.append(score) 
         
-        scores_deque.append(score) 
+        episode_reward = np.max(np.sum(np.array(episode_rewards), axis=0))
+
+        scores.append(episode_reward)
+        scores_deque.append(episode_reward) 
         avg_score = np.mean(scores_deque)
+        average_scores.append(avg_score)
         maddpg.current_avg_score = avg_score
+
+        if episode_reward > max_reward:
+            max_reward = episode_reward
 
         wandb.log({
                 "episode":ith_episode,
-                "score": score,
+                "max_reward": max_reward,
                 "moving_average_score": avg_score
             })        
 
-        print("Episode: {}\t Avg score: {}\t Score: {}\t Noise: {}".format(ith_episode, avg_score, score, maddpg.noise_decay_rate)) 
-        if avg_score >= 0.5:
+        print("Episode: {}\t Avg score: {}\t Score: {}\t MaxR: {}\t Bffr: {}\t Noise: {}".format(
+            ith_episode, 
+            round(avg_score, 5), 
+            round(episode_reward, 5), 
+            max_reward,
+            len(maddpg.memory),
+            maddpg.noise_scalar)) 
+        
+        if avg_score >= 0.51:
             print("success, saving model")
             for n, agent in enumerate(maddpg.agents):
                 torch.save(agent.actor_local.state_dict(), "success_checkpoint_actor_{}.pth".format(n))   

@@ -25,10 +25,9 @@ class Actor(nn.Module):
         super(Actor, self).__init__()
         self.seed = torch.manual_seed(seed) 
         self.fc1 = nn.Linear(state_size, network_shape[0])
-
-        self.bn1 = nn.BatchNorm1d(network_shape[0]) 
         self.fc2 = nn.Linear(network_shape[0], network_shape[1]) 
         self.fc3 = nn.Linear(network_shape[1], action_size) 
+        self.bn1 = nn.BatchNorm1d(128)
         self.reset_parameters() 
 
     def reset_parameters(self):
@@ -39,13 +38,11 @@ class Actor(nn.Module):
 
     def forward(self, state):
         """Build an actor (policy) network that maps states -> actions.""" 
-        #import ipdb; ipdb.set_trace()  
         if state.ndim == 1:
             state = torch.unsqueeze(state, 0)         
-
+        
         x = F.relu(self.fc1(state)) 
-
-        x = self.bn1(x) 
+        x = self.bn1(x)
         x = F.relu(self.fc2(x)) 
         return torch.tanh(self.fc3(x)) 
 
@@ -68,9 +65,9 @@ class Critic(nn.Module):
 
         #self.num_agents = num_agents 
         self.seed =     torch.manual_seed(seed) 
-        self.fcs1 =     nn.Linear(state_size*2, network_shape[0])
-        self.bn1 =      nn.BatchNorm1d(network_shape[0]) 
-        self.fc2 =      nn.Linear(network_shape[0] + action_size*2, network_shape[1]) 
+        self.bn1 =      nn.BatchNorm1d(network_shape[0])
+        self.fcs1 =     nn.Linear(state_size, network_shape[0])
+        self.fc2 =      nn.Linear(network_shape[0] + action_size, network_shape[1]) 
         #self.fc3 =     nn.Linear(network_shape[1], network_shape[2])
         self.fc4 =      nn.Linear(network_shape[1], 1)
         self.reset_parameters()
@@ -84,13 +81,9 @@ class Critic(nn.Module):
 
 
     def forward(self, states, actions):
+        #import ipdb; ipdb.set_trace()
         """Build a critic (value) network that maps (state, action) pairs -> Q-values."""
-        # State = Tensor[1024, 24]
-        # action = Tensor[1024, 2] 
-        
         xs = F.relu(self.fcs1(states)) 
-        #if xs.ndim == 1:
-        #    xs = torch.unsqueeze(xs, 0)  
         xs = self.bn1(xs)
         x = torch.cat((xs, actions), dim=1)    #x = torch.vstack((xs, action))
         x = F.relu(self.fc2(x))
