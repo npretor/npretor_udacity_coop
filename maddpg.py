@@ -11,28 +11,36 @@ from ddpg_model import Actor, Critic
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
+
 class DemoAgents():
     def __init__(self, num_agents, state_size, action_size, seed, checkpoints_folder, settings) -> None:
 
-        agents = []
+        self.agents = []
 
-        for i in range(num_agents):
-            
-            actor = Actor(state_size, action_size, random.random(), settings['actor_network_shape']).to(device),
-            critic = Critic(state_size, action_size, random.random(), settings['critic_network_shape']).to(device)
+        for id in range(num_agents):
+            actor = Actor(state_size, action_size, random.random(), settings['actor_network_shape']).to(device)
+            actor.load_state_dict(torch.load(os.path.join(checkpoints_folder, 'success_checkpoint_actor_{}.pth'.format(id))))   
+            self.agents.append(actor) 
+
+    def act(self, states):
+        #for state, agent in zip(states, self.agents):
+        actions = np.zeros((2,2))
+        actions_list = []
+
+        for i, state in enumerate(states):
+            state = torch.from_numpy(state).float().unsqueeze(0).to(device) 
+            self.agents[i].eval()
+            with torch.no_grad():
+                action_values = self.agents[i](state) 
+
+            import ipdb; ipdb.set_trace() 
+            actions[i] = action_values.cpu().data.numpy().reshape(2)  
+            #actions_list.append(action_values.cpu().data.numpy().reshape(2)) 
+        # return(np.array(actions_list).reshape(4))
+        return actions
         
-            actor.load_state_dict(torch.load(os.path.join(checkpoints_folder, 'success_checkpoint_actor_{}'.format(id))))   
-            critic.load_state_dict(torch.load(os.path.join(checkpoints_folder, 'success_checkpoint_critic_{}'.format(id)))) 
 
-            agents.append([actor, critic]) 
 
-    def act(self, state):
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device) 
-        self.actor.eval()
-        self.critic.eval() 
-        with torch.no_grad():
-            action_values = self.actor(state) 
-        return action_values.cpu().data.numpy()         
 
 
 class Agent():
@@ -106,6 +114,7 @@ class Agent():
         # Get a state from actor_local and add it to the list of states for each actor  
         with torch.no_grad():
             action = self.actor_local(state).cpu().data.numpy() 
+            print(action.reshape(1,-1))
 
         self.actor_local.train()
         if add_noise:

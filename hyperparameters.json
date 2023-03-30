@@ -8,8 +8,8 @@
     "WEIGHT_DECAY": 0,              
     "num_episodes": 20000, 
     "max_timesteps": 1000, 
-    "actor_network_shape": [128, 128, 0],
-    "critic_network_shape": [128, 128, 0], 
+    "actor_network_shape": [128, 64, 0],
+    "critic_network_shape": [128, 64, 0], 
     "LEARN_EVERY": 1,
     "N_RETRAININGS": 1, 
     "NOISE_DECAY": 0.0001

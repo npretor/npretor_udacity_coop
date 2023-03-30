@@ -34,7 +34,7 @@ with open("hyperparameters.json", 'r') as f:
 #     ) 
 
 maddpg = AgentOrchestrator(2, state_size, action_size, 10, settings)
-maddpg.load_checkpoint('./checkpoints/soft-bush-60')
+maddpg.load_checkpoint('./checkpoints/grateful-river-62_128x64')
 
 scores_deque = deque(maxlen=100)
 scores = []
