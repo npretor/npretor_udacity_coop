@@ -100,6 +100,8 @@ class Agent():
     
     def act(self, state, noise_decay_rate, add_noise=True):
         """
+        Cloned from the ddpg repo
+        Added a noise decay 
         states(list): 
             list of states for each agent 
         Returns: 
@@ -114,7 +116,7 @@ class Agent():
         # Get a state from actor_local and add it to the list of states for each actor  
         with torch.no_grad():
             action = self.actor_local(state).cpu().data.numpy() 
-            print(action.reshape(1,-1))
+            #print(action.reshape(1,-1))
 
         self.actor_local.train()
         if add_noise:
@@ -145,16 +147,15 @@ class Agent():
         """
 
         global_states, global_actions, global_rewards, global_next_states, global_dones = experiences
-        self.critic_optimizer.zero_grad()
         agent_index = torch.tensor([agent_index]).to(device)
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models
 
-        #all_next_actions = torch.hstack((all_next_actions[0], all_next_actions[1]))
+        #actions_next = torch.hstack((all_next_actions[0], all_next_actions[1]))
         actions_next = torch.cat(all_next_actions, dim=1).to(device)  
 
         with torch.no_grad():
-            #                                        [256,48]          [256, 4]
+            #                                    [batch_size,48]   [batch_size, 4]
             Q_targets_next = self.critic_target(global_next_states, actions_next) 
 
         Q_expected = self.critic_local(global_states, global_actions)  
@@ -165,6 +166,7 @@ class Agent():
         self.critic_optimizer.zero_grad() 
 
         # Minimize the loss
+        self.critic_optimizer.zero_grad()
         critic_loss.backward() 
         # Taken from: https://github.com/adaptationio/DDPG-Continuous-Control/blob/master/agent.py
         torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)     
@@ -339,15 +341,12 @@ class AgentOrchestrator:
         for agent_index, agent in enumerate(self.agents):
 
             states, _ , _ , next_states, _ = experiences[agent_index] 
-            id = torch.tensor([agent_index]).to(device)     
 
-            state = states.reshape(-1, self.action_size, self.state_size).index_select(1, id).squeeze(1)
-            action = agent.actor_local(state) 
-            actions.append(action)
+            state = states.reshape(-1, self.num_agents, self.state_size)[:, agent_index ,:].squeeze(1)
+            actions.append(agent.actor_local(state))
 
-            next_state = next_states.reshape(-1, self.action_size, self.state_size).index_select(1, id).squeeze(1)            
-            next_action = agent.actor_target(next_state) 
-            next_actions.append(next_action)
+            next_state = next_states.reshape(-1, self.num_agents, self.state_size)[:, agent_index, :].squeeze(1)     
+            next_actions.append(agent.actor_target(next_state))
 
         for agent_index, agent in enumerate(self.agents):
             agent.learn(experiences[agent_index], agent_index, gamma, actions, next_actions) 

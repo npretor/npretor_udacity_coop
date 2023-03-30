@@ -40,7 +40,7 @@ def training(num_episodes, max_timesteps=1000):
     max_reward = 0.0
 
     for ith_episode in range(1, num_episodes+1): 
-        # Reset the environment and get the starting states
+
         env_info = env.reset(train_mode=True)[brain_name]     
         global_states = env_info.vector_observations 
         agents_scores = np.zeros(num_agents)
@@ -53,8 +53,6 @@ def training(num_episodes, max_timesteps=1000):
         for timestep in range(max_timesteps):
             
             global_actions = maddpg.act(global_states, full_random=False)   
-            #
-            # print('actions: ',global_actions)
 
             env_info = env.step(global_actions)[brain_name]           
             global_next_states = env_info.vector_observations         
