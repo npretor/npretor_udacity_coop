@@ -23,8 +23,6 @@ Principal differences:
 From Lowe et al.(2017): <i>"in which each agent trains a DDPG algorithm such that the actor with policy weights observes the local observations, while the critic is allowed to access the observations, actions, and the target policies of all agents in the training time. Then the critic of each agent concatenates all state-actions together as the input, and using the local reward obtains the corresponding Q-value. Either of the critics are trained by minimizing a DQN-like loss function." (shown below) </i>
 ![Action value function for MADDPG](./media/maddpg_action_value_function.png) 
 
-Based on this I plan to modify the DDPG into a MADDPG using the following method. 
-
 
 ## Observation space
  - 24 vectors (not sure why Udacity say 8, maybe each vector has three directional components? )
@@ -64,12 +62,13 @@ I chose an MADDPG implimentation, since I had already created and trained a DDPG
 3. Get the expected reward of the current (target network?) using: 
     y = agent_reward + gamma * (estimated_next_action_reward)
     Q_t = r_agent + (gamma * Q_t_next * (1 - dones)) 
-4. Minimize the reward 
-    Also the paper (A review of cooperative multi-agent deep reinforcement learning) explains that the agents act on their local observations and rewards, but the critic evaluates their actions based on the global actions 
+4. Minimize the loss between expected and actual rewards.
+
+    The paper: (A review of cooperative multi-agent deep reinforcement learning) explains that the agents act on their local observations and rewards, but the critic evaluates their actions based on the global actions 
 
 
 # Hyperparameters
-I largely stuck to previously used hyperparameters. I changed the batch size to 256, tried a couple variations of gamma, adjusted the actor and critic learning rates between 0.001 and 0.0001. I also modified how I was decreasing the noise in this model vs my DDPG implimentation. 
+I largely stuck to previously used hyperparameters. I changed the batch size to 256, tried a couple variations of gamma, adjusted the actor and critic learning rates between 0.001 and 0.0001. I also modified how I was decreasing the noise in this model vs my DDPG implimentation, in this version it decreases based on a schedule rather than proximity to the goal. 
 The final adjustment was changing the network shape. Previously I had used a 128x128 size network for the DDPG agents, but this time I tried a few variations and found 128x64 to train the fastest with the highest rewards. Final hyperparameters are below: 
 
     "BUFFER_SIZE": 100000,     
