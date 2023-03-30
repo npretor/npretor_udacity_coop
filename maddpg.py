@@ -159,7 +159,11 @@ class Agent():
             Q_targets_next = self.critic_target(global_next_states, actions_next) 
 
         Q_expected = self.critic_local(global_states, global_actions)  
-        Q_targets = global_rewards.index_select(1, agent_index) + (gamma * Q_targets_next * (1-global_dones.index_select(1, agent_index)))
+
+        local_rewards = global_rewards[:, agent_index]  
+        local_dones = global_dones[:, agent_index] 
+        
+        Q_targets = local_rewards + (gamma * Q_targets_next * (1-local_dones)) 
         
         critic_loss = F.mse_loss(Q_expected, Q_targets) 
         self.critic_loss = critic_loss
@@ -177,7 +181,6 @@ class Agent():
         # Minimize the loss
         self.actor_optimizer.zero_grad()
 
-        #import ipdb; ipdb.set_trace()
         
         # critic_local( [256, 48], [256, 4]) 
         #actor_loss = -self.critic_local(global_states.reshape(batch_size, -1), global_next_actions_pred.reshape(batch_size, -1)).mean() 
