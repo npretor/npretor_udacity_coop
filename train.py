@@ -1,6 +1,6 @@
 import random, time, json
-from unityagents import UnityEnvironment
 from collections import deque
+from unityagents import UnityEnvironment
 import numpy as np
 from maddpg import AgentOrchestrator 
 import wandb
@@ -30,14 +30,13 @@ print('There are {} agents. Each observes a state with length: {}'.format(states
 print('The state for the first agent looks like:', states[0])
 
 
-maddpg = AgentOrchestrator(num_agents=num_agents,  state_size=state_size, action_size=action_size, seed=10, settings=settings)
+maddpg = AgentOrchestrator(num_agents=num_agents,  state_size=state_size, action_size=action_size, seed=10, settings=settings) 
 
 
 def training(num_episodes, max_timesteps=1000):
     scores_deque = deque(maxlen=100)
     scores = []
     average_scores = [] 
-    avg_scores = []
     max_reward = 0.0
 
     for ith_episode in range(1, num_episodes+1): 
@@ -97,11 +96,13 @@ def training(num_episodes, max_timesteps=1000):
             len(maddpg.memory),
             maddpg.noise_scalar)) 
         
-        if avg_score >= 0.51:
+        goal = 0.51
+        if avg_score >= goal:
             print("success, saving model")
             for n, agent in enumerate(maddpg.agents):
                 torch.save(agent.actor_local.state_dict(), "success_checkpoint_actor_{}.pth".format(n))   
                 torch.save(agent.critic_local.state_dict(), "success_checkpoint_critic_{}.pth".format(n)) 
+            goal += 0.1
 
 
 training(settings['num_episodes'], settings['max_timesteps'])

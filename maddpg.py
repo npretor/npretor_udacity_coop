@@ -1,4 +1,5 @@
 import random
+import os
 from collections import namedtuple, deque
 import copy 
 import torch 
@@ -7,16 +8,23 @@ import torch.optim as optim
 import numpy as np
 from ddpg_model import Actor, Critic
 
-#device = torch.device("cpu") 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-class DemoAgent():
-    def __init__(self, state_size, action_size, seed, actor_path, critic_path, settings) -> None:
-        self.actor= Actor(state_size, action_size, random.random(), settings['actor_network_shape']).to(device)
-        self.critic = Critic(state_size, action_size, random.random(), settings['critic_network_shape']).to(device)
-        self.actor.load_state_dict(torch.load(actor_path))   
-        self.critic.load_state_dict(torch.load(critic_path)) 
+class DemoAgents():
+    def __init__(self, num_agents, state_size, action_size, seed, checkpoints_folder, settings) -> None:
+
+        agents = []
+
+        for i in range(num_agents):
+            
+            actor = Actor(state_size, action_size, random.random(), settings['actor_network_shape']).to(device),
+            critic = Critic(state_size, action_size, random.random(), settings['critic_network_shape']).to(device)
+        
+            actor.load_state_dict(torch.load(os.path.join(checkpoints_folder, 'success_checkpoint_actor_{}'.format(id))))   
+            critic.load_state_dict(torch.load(os.path.join(checkpoints_folder, 'success_checkpoint_critic_{}'.format(id)))) 
+
+            agents.append([actor, critic]) 
 
     def act(self, state):
         state = torch.from_numpy(state).float().unsqueeze(0).to(device) 
@@ -55,7 +63,6 @@ class Agent():
         #self.noise_scalar = 1.0
         #self.noise_decay = 0.001 
 
-
         self.actor_loss = 0.0 
         self.critic_loss = 0.0 
 
@@ -76,7 +83,7 @@ class Agent():
         # Replay memory
         #self.memory = ReplayBuffer(action_size, self.settings["BUFFER_SIZE"], self.settings["BATCH_SIZE"], random_seed)
 
-        # Target and local should be the same for actor and critic
+        # Clone target and local weights for both sets of networks
         for target_param, local_param in zip(self.actor_local.parameters(), self.actor_target.parameters()):
             target_param.data.copy_(local_param.data)  
             
@@ -104,7 +111,7 @@ class Agent():
         if add_noise:
             #self.noise_decay_rate = 1 - (self.current_avg_score/self.goal_avg_score)
             action += (self.noise.sample().reshape((-1)) * noise_decay_rate) 
-        return np.clip(action, -1, 1)
+        return np.clip(action, -1, 1) 
 
     def reset(self):
         self.noise.reset()
@@ -176,7 +183,6 @@ class Agent():
 
         # import ipdb; ipdb.set_trace()
         all_actions_td = [actions if i == self.agent_id else actions.detach() for i, actions in enumerate(all_actions)]
-
         all_actions_td = torch.cat(all_actions_td, dim=1).to(device)
         actor_loss = -self.critic_local(global_states, all_actions_td).mean()
         
@@ -304,17 +310,20 @@ class AgentOrchestrator:
         self.noise_decay_rate = abs(1 - (self.current_avg_score/self.goal_avg_score))  
 
         self.noise_scalar = 1.0
-        self.noise_decay = 0.001
+        self.noise_decay = self.settings['NOISE_DECAY']
 
         #  - - - - - Setup agents - - - - - #
         self.agents = [] 
         for id in range(num_agents): 
             self.agents.append(Agent(state_size, action_size, seed, settings, self.num_agents, id)) 
         
-        self.memory = ReplayBuffer(action_size, self.settings["BUFFER_SIZE"], self.settings["BATCH_SIZE"], seed=55) 
+        self.memory = ReplayBuffer(action_size, self.settings["BUFFER_SIZE"], self.settings["BATCH_SIZE"], seed=seed) 
 
 
     def learn(self, experiences, gamma):
+        """
+        Get the actions and next actions
+        """
         next_actions = [] 
         actions = [] 
 
@@ -323,12 +332,10 @@ class AgentOrchestrator:
             states, _ , _ , next_states, _ = experiences[agent_index] 
             id = torch.tensor([agent_index]).to(device)     
 
-            #state = states.reshape(self.settings['BATCH_SIZE'], self.num_agents, 24) 
             state = states.reshape(-1, self.action_size, self.state_size).index_select(1, id).squeeze(1)
             action = agent.actor_local(state) 
             actions.append(action)
 
-            #next_state = states.reshape(self.settings['BATCH_SIZE'], self.num_agents, 24)
             next_state = next_states.reshape(-1, self.action_size, self.state_size).index_select(1, id).squeeze(1)            
             next_action = agent.actor_target(next_state) 
             next_actions.append(next_action)
@@ -349,25 +356,28 @@ class AgentOrchestrator:
         self.memory.add(global_states, global_actions, global_rewards, global_next_states, global_dones) 
 
         if len(self.memory) > self.settings["BATCH_SIZE"] and self.timestep % self.settings["LEARN_EVERY"] == 0:
-            N_RETRAININGS = 1
-            for _ in range(N_RETRAININGS):
+            for _ in range(self.settings['N_RETRAININGS']):
                 experiences = [self.memory.sample() for _ in range(self.num_agents)] 
                 self.learn(experiences, self.settings['GAMMA']) 
     
 
-    def act(self, all_agent_states, full_random=False):
+    def act(self, all_agent_states, full_random=False, add_noise=True):
+        """State is the state of both agents"""
         if full_random:
             return np.clip(np.random.randn(self.num_agents, self.action_size), -1, 1).reshape(1,-1)                  
 
-        """State is the state of both agents"""
-        actions = np.empty((self.num_agents, 2))    # This should be clipped 
-        #for agent, state in zip(self.agents, all_agent_states):
+        actions = np.empty((self.num_agents, 2))    # This should be reshaped 
         for i, agent in enumerate(self.agents):
             #self.noise_decay_rate = abs(1 - (self.current_avg_score/self.goal_avg_score) )
-            
-
-                            
-            #self.noise_decay_rate = 1.0
-            actions[i] = agent.act(all_agent_states[i], self.noise_scalar) 
+            actions[i] = agent.act(all_agent_states[i], self.noise_scalar, add_noise=False) 
 
         return actions.reshape(1, -1)
+
+    def load_checkpoint(self, path):
+        for id, agent in enumerate(self.agents):
+            assert(os.path.exists(os.path.join(path, 'success_checkpoint_actor_{}.pth'.format(id))))
+            assert(os.path.exists(os.path.join(path, 'success_checkpoint_critic_{}.pth'.format(id))))
+
+            agent.actor_local.load_state_dict(torch.load(os.path.join(path, 'success_checkpoint_actor_{}.pth'.format(id))))
+            agent.critic_local.load_state_dict(torch.load(os.path.join(path, 'success_checkpoint_critic_{}.pth'.format(id))))
+            
