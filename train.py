@@ -16,8 +16,6 @@ env = UnityEnvironment(file_name="Tennis_Linux/Tennis.x86_64")
 # get the default brain
 brain_name = env.brain_names[0]
 brain = env.brains[brain_name]
-
-# reset the environment
 env_info = env.reset(train_mode=True)[brain_name]
 
 num_agents = len(env_info.agents)
